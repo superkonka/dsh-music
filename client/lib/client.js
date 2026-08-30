@@ -86,31 +86,30 @@ window.__ModuleLoader__.load({
         ".ncm-msg{font-size:12px;opacity:.8;text-align:center;min-height:16px;}" +
         ".ncm-now{position:relative;overflow:hidden;border-radius:14px;margin-bottom:10px;}" +
         ".ncm-nowBg{position:absolute;inset:-24px;background-size:cover;background-position:center;filter:blur(28px);transform:scale(1.15);opacity:.85;}" +
-        ".ncm-nowTint{position:absolute;inset:0;background:rgba(18,18,22,.5);}" +
-        ".ncm-nowGlass{position:relative;display:flex;gap:14px;align-items:center;padding:12px;background:rgba(28,28,34,.28);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);border:1px solid rgba(255,255,255,.07);}" +
-        ".ncm-coverWrap{flex:0 0 auto;}" +
-        ".ncm-cover{width:64px;height:64px;border-radius:10px;object-fit:cover;display:block;background:rgba(128,128,128,.2);box-shadow:0 4px 14px rgba(0,0,0,.45);border:1px solid rgba(255,255,255,.12);}" +
-        ".ncm-nowRight{flex:1;min-width:0;display:flex;flex-direction:column;gap:8px;}" +
-        ".ncm-nowTitle{font-size:14px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}" +
-        ".ncm-progRow{display:flex;align-items:center;gap:8px;}" +
-        ".ncm-time{font-size:10px;opacity:.6;font-variant-numeric:tabular-nums;flex:0 0 auto;min-width:26px;text-align:center;}" +
+        ".ncm-nowTint{position:absolute;inset:0;background:rgba(18,18,24,.4);}" +
+        ".ncm-nowGlass{position:relative;display:flex;flex-direction:column;gap:12px;padding:14px 16px;background:rgba(26,26,32,.32);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);border:1px solid rgba(255,255,255,.07);}" +
+        ".ncm-nowTop{display:flex;align-items:center;gap:12px;width:100%;}" +
+        ".ncm-nowTitle{font-size:14px;font-weight:600;flex:0 1 auto;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}" +
+        ".ncm-progRow{flex:1;display:flex;align-items:center;gap:8px;min-width:0;}" +
+        ".ncm-time{font-size:10px;opacity:.6;font-variant-numeric:tabular-nums;flex:0 0 auto;min-width:24px;text-align:center;}" +
         ".ncm-progress{flex:1;height:14px;position:relative;cursor:pointer;}" +
         ".ncm-progressTrack{position:absolute;left:0;right:0;top:50%;height:4px;transform:translateY(-50%);background:rgba(128,128,128,.28);border-radius:2px;}" +
         ".ncm-progressFill{position:absolute;left:0;top:50%;height:4px;transform:translateY(-50%);background:#ec4141;border-radius:2px;pointer-events:none;}" +
         ".ncm-progressThumb{position:absolute;top:50%;width:12px;height:12px;border-radius:50%;background:#ec4141;transform:translate(-50%,-50%);box-shadow:0 1px 5px rgba(0,0,0,.35);pointer-events:none;}" +
         ".ncm-ctlRow{display:flex;align-items:center;justify-content:space-between;width:100%;}" +
-        ".ncm-ctlCenter{display:flex;align-items:center;gap:12px;}" +
-        ".ncm-ctlBtn{cursor:pointer;background:transparent;border:none;color:inherit;width:34px;height:34px;border-radius:50%;display:flex;align-items:center;justify-content:center;color:var(--dsh-text,#e5e7eb);}" +
+        ".ncm-lyricBtn{cursor:pointer;background:transparent;border:none;color:inherit;font-size:11px;opacity:.85;padding:2px 6px;flex:0 0 auto;}" +
+        ".ncm-lyricBtn:hover{opacity:1;}" +
+        ".ncm-ctlCenter{display:flex;align-items:center;gap:10px;}" +
+        ".ncm-ctlBtn{cursor:pointer;background:transparent;border:none;color:inherit;width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;color:var(--dsh-text,#e5e7eb);}" +
         ".ncm-ctlBtn:hover{background:rgba(128,128,128,.12);}" +
-        ".ncm-ctlMain{width:40px;height:40px;background:#ec4141;color:#fff;}" +
+        ".ncm-ctlMain{width:38px;height:38px;background:#ec4141;color:#fff;}" +
         ".ncm-ctlMain:hover{background:#d93434;}" +
         ".ncm-ctlBtn svg,.ncm-ctlMain svg{display:block;}" +
         ".ncm-mode{cursor:pointer;background:transparent;border:none;color:inherit;font-size:16px;width:24px;display:flex;align-items:center;justify-content:center;opacity:.85;}" +
         ".ncm-mode:hover{opacity:1;}" +
         ".ncm-volWrap{display:flex;align-items:center;gap:4px;}" +
         ".ncm-volIcon{display:flex;align-items:center;}" +
-        ".ncm-vol{width:64px;accent-color:#ec4141;cursor:pointer;}" +
-        ".ncm-lyricToggle{margin-top:0;display:flex;justify-content:center;}" +
+        ".ncm-vol{width:52px;accent-color:#ec4141;cursor:pointer;}" +
         ".ncm-lyricBox{height:130px;overflow:hidden;position:relative;margin-top:10px;border-top:1px solid var(--dsh-border,#3f3f46);}" +
         ".ncm-lyricInner{transition:transform .4s ease;padding:0 4px;}" +
         ".ncm-lyricLine{height:26px;line-height:26px;text-align:center;font-size:12px;opacity:.4;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}" +
@@ -468,19 +467,18 @@ window.__ModuleLoader__.load({
         current.picUrl ? React.createElement("div", { className: "ncm-nowBg", style: { backgroundImage: "url('" + httpsUrl(current.picUrl) + "')" } }) : null,
         React.createElement("div", { className: "ncm-nowTint" }),
         React.createElement("div", { className: "ncm-nowGlass" },
-        React.createElement("div", { className: "ncm-coverWrap" },
-          current.picUrl ? React.createElement("img", { className: "ncm-cover", src: httpsUrl(current.picUrl), alt: current.name, onError: function (e) { e.currentTarget.style.visibility = "hidden"; } }) : React.createElement("div", { className: "ncm-cover" }, "🎵"),
-        ),
-        React.createElement("div", { className: "ncm-nowRight" },
-          React.createElement("div", { className: "ncm-nowTitle" }, current.name + (current.artists ? " · " + current.artists : "")),
-          React.createElement("div", { className: "ncm-progRow" },
-            React.createElement("span", { className: "ncm-time" }, fmt(cur * 1000)),
-            React.createElement(ProgressBar, { cur: cur, dur: dur, onSeek: seek }),
-            React.createElement("span", { className: "ncm-time" }, fmt(dur * 1000)),
+          React.createElement("div", { className: "ncm-nowTop" },
+            React.createElement("div", { className: "ncm-nowTitle" }, current.name + (current.artists ? " · " + current.artists : "")),
+            React.createElement("div", { className: "ncm-progRow" },
+              React.createElement("span", { className: "ncm-time" }, fmt(cur * 1000)),
+              React.createElement(ProgressBar, { cur: cur, dur: dur, onSeek: seek }),
+              React.createElement("span", { className: "ncm-time" }, fmt(dur * 1000)),
+            ),
           ),
           React.createElement("div", { className: "ncm-ctlRow" },
-            React.createElement("button", { className: "ncm-mode", onClick: cycleMode, title: modeTitle(mode) }, modeIcon(mode)),
+            React.createElement("button", { className: "ncm-lyricBtn", onClick: function () { setLyricOpen(!lyricOpen); } }, lyricOpen ? "歌词 ✕" : "📜 歌词"),
             React.createElement("div", { className: "ncm-ctlCenter" },
+              React.createElement("button", { className: "ncm-mode", onClick: cycleMode, title: modeTitle(mode) }, modeIcon(mode)),
               React.createElement("button", { className: "ncm-ctlBtn", onClick: playPrev, title: "上一首" }, React.createElement(Icon, { d: ICONS.prev })),
               React.createElement("button", { className: "ncm-ctlBtn ncm-ctlMain", onClick: togglePlay, title: "播放/暂停" }, React.createElement(Icon, { d: playing ? ICONS.pause : ICONS.play, size: 22 })),
               React.createElement("button", { className: "ncm-ctlBtn", onClick: playNext, title: "下一首" }, React.createElement(Icon, { d: ICONS.next })),
@@ -490,10 +488,6 @@ window.__ModuleLoader__.load({
               React.createElement("input", { type: "range", className: "ncm-vol", min: 0, max: 100, value: Math.round(volume * 100), onChange: function (e) { changeVolume(Number(e.target.value) / 100); } }),
             ),
           ),
-          React.createElement("div", { className: "ncm-lyricToggle" },
-            React.createElement("button", { className: "ncm-btn", onClick: function () { setLyricOpen(!lyricOpen); } }, lyricOpen ? "收起歌词" : "📜 歌词"),
-          ),
-        ),
         ),
       ) : null;
 
