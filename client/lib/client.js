@@ -89,20 +89,24 @@ window.__ModuleLoader__.load({
         ".ncm-cover{width:120px;height:120px;border-radius:12px;object-fit:cover;display:block;background:rgba(128,128,128,.2);box-shadow:0 10px 28px rgba(0,0,0,.3);}" +
         ".ncm-nowTitle{font-size:16px;font-weight:600;margin-top:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;}" +
         ".ncm-nowArtist{font-size:13px;opacity:.65;margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;}" +
-        ".ncm-progRow{display:flex;align-items:center;gap:8px;margin-top:14px;width:100%;}" +
-        ".ncm-progress{flex:1;height:5px;background:rgba(128,128,128,.25);border-radius:3px;cursor:pointer;position:relative;}" +
-        ".ncm-progressFill{position:absolute;left:0;top:0;bottom:0;background:#ec4141;border-radius:3px;pointer-events:none;}" +
-        ".ncm-time{font-size:10px;opacity:.55;font-variant-numeric:tabular-nums;flex:0 0 auto;}" +
-        ".ncm-ctlRow{display:flex;align-items:center;justify-content:center;gap:26px;margin-top:14px;}" +
-        ".ncm-ctlBtn{cursor:pointer;background:transparent;border:none;color:inherit;font-size:22px;line-height:1;padding:4px;display:flex;align-items:center;justify-content:center;}" +
-        ".ncm-ctlBtn:hover{opacity:.75;}" +
-        ".ncm-ctlMain{width:50px;height:50px;border-radius:50%;background:#ec4141;color:#fff;font-size:19px;}" +
+        ".ncm-progRow{display:flex;align-items:center;gap:10px;margin-top:16px;width:100%;}" +
+        ".ncm-time{font-size:11px;opacity:.65;font-variant-numeric:tabular-nums;flex:0 0 auto;min-width:32px;text-align:center;}" +
+        ".ncm-progress{flex:1;height:18px;position:relative;cursor:pointer;}" +
+        ".ncm-progressTrack{position:absolute;left:0;right:0;top:50%;height:4px;transform:translateY(-50%);background:rgba(128,128,128,.28);border-radius:2px;}" +
+        ".ncm-progressFill{position:absolute;left:0;top:50%;height:4px;transform:translateY(-50%);background:#ec4141;border-radius:2px;pointer-events:none;}" +
+        ".ncm-progressThumb{position:absolute;top:50%;width:12px;height:12px;border-radius:50%;background:#ec4141;transform:translate(-50%,-50%);box-shadow:0 1px 5px rgba(0,0,0,.35);pointer-events:none;}" +
+        ".ncm-ctlRow{display:flex;align-items:center;justify-content:center;gap:22px;margin-top:14px;}" +
+        ".ncm-ctlBtn{cursor:pointer;background:transparent;border:none;color:inherit;width:38px;height:38px;border-radius:50%;display:flex;align-items:center;justify-content:center;color:var(--dsh-text,#e5e7eb);}" +
+        ".ncm-ctlBtn:hover{background:rgba(128,128,128,.12);}" +
+        ".ncm-ctlMain{width:46px;height:46px;background:#ec4141;color:#fff;}" +
         ".ncm-ctlMain:hover{background:#d93434;}" +
+        ".ncm-ctlBtn svg,.ncm-ctlMain svg{display:block;}" +
         ".ncm-subRow{display:flex;align-items:center;justify-content:center;gap:14px;margin-top:12px;}" +
-        ".ncm-mode{cursor:pointer;background:transparent;border:none;color:inherit;font-size:18px;padding:4px;opacity:.85;}" +
+        ".ncm-mode{cursor:pointer;background:transparent;border:none;color:inherit;font-size:17px;width:30px;height:30px;display:flex;align-items:center;justify-content:center;opacity:.85;}" +
         ".ncm-mode:hover{opacity:1;}" +
         ".ncm-volWrap{display:flex;align-items:center;gap:6px;}" +
-        ".ncm-vol{width:110px;accent-color:#ec4141;cursor:pointer;}" +
+        ".ncm-volIcon{display:flex;align-items:center;}" +
+        ".ncm-vol{width:88px;accent-color:#ec4141;cursor:pointer;}" +
         ".ncm-lyricToggle{margin-top:12px;display:flex;justify-content:center;}" +
         ".ncm-lyricBox{height:130px;overflow:hidden;position:relative;margin-top:10px;border-top:1px solid var(--dsh-border,#3f3f46);}" +
         ".ncm-lyricInner{transition:transform .4s ease;padding:0 4px;}" +
@@ -144,6 +148,19 @@ window.__ModuleLoader__.load({
       return m + ":" + (s < 10 ? "0" : "") + s;
     }
 
+    const ICONS = {
+      play: "M8 5v14l11-7z",
+      pause: "M6 5h4v14H6zM14 5h4v14h-4z",
+      prev: "M6 6h2v12H6zM20 6v12L10 12z",
+      next: "M16 6h2v12h-2zM4 6v12l10-6z",
+      volume: "M3 9v6h4l5 5V4L7 9H3z",
+    };
+    function Icon(props) {
+      return React.createElement("svg", { viewBox: "0 0 24 24", width: props.size || 22, height: props.size || 22, fill: "currentColor", "aria-hidden": true, style: { display: "block" } },
+        React.createElement("path", { d: props.d }),
+      );
+    }
+
     function ProgressBar(props) {
       const pct = props.dur ? Math.min(100, Math.max(0, props.cur / props.dur * 100)) : 0;
       return React.createElement("div", { className: "ncm-progress", onClick: function (e) {
@@ -152,7 +169,9 @@ window.__ModuleLoader__.load({
         const ratio = (e.clientX - rect.left) / rect.width;
         props.onSeek(ratio * props.dur);
       } },
+        React.createElement("div", { className: "ncm-progressTrack" }),
         React.createElement("div", { className: "ncm-progressFill", style: { width: pct + "%" } }),
+        React.createElement("div", { className: "ncm-progressThumb", style: { left: pct + "%" } }),
       );
     }
 
@@ -454,14 +473,14 @@ window.__ModuleLoader__.load({
           React.createElement("span", { className: "ncm-time" }, fmt(dur * 1000)),
         ),
         React.createElement("div", { className: "ncm-ctlRow" },
-          React.createElement("button", { className: "ncm-ctlBtn", onClick: playPrev, title: "上一首" }, "⏮"),
-          React.createElement("button", { className: "ncm-ctlBtn ncm-ctlMain", onClick: togglePlay, title: "播放/暂停" }, playing ? "⏸" : "▶"),
-          React.createElement("button", { className: "ncm-ctlBtn", onClick: playNext, title: "下一首" }, "⏭"),
+          React.createElement("button", { className: "ncm-ctlBtn", onClick: playPrev, title: "上一首" }, React.createElement(Icon, { d: ICONS.prev })),
+          React.createElement("button", { className: "ncm-ctlBtn ncm-ctlMain", onClick: togglePlay, title: "播放/暂停" }, React.createElement(Icon, { d: playing ? ICONS.pause : ICONS.play, size: 24 })),
+          React.createElement("button", { className: "ncm-ctlBtn", onClick: playNext, title: "下一首" }, React.createElement(Icon, { d: ICONS.next })),
         ),
         React.createElement("div", { className: "ncm-subRow" },
           React.createElement("button", { className: "ncm-mode", onClick: cycleMode, title: modeTitle(mode) }, modeIcon(mode)),
           React.createElement("div", { className: "ncm-volWrap" },
-            React.createElement("span", { style: { fontSize: 13, opacity: .7 } }, "🔊"),
+            React.createElement("span", { className: "ncm-volIcon", style: { opacity: .7 } }, React.createElement(Icon, { d: ICONS.volume, size: 15 })),
             React.createElement("input", { type: "range", className: "ncm-vol", min: 0, max: 100, value: Math.round(volume * 100), onChange: function (e) { changeVolume(Number(e.target.value) / 100); } }),
           ),
         ),
