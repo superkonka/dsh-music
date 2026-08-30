@@ -84,9 +84,12 @@ window.__ModuleLoader__.load({
         ".ncm-login{display:flex;flex-direction:column;align-items:center;gap:10px;padding:16px 0;}" +
         ".ncm-qr{width:176px;height:176px;border-radius:12px;border:1px solid var(--dsh-border,#3f3f46);}" +
         ".ncm-msg{font-size:12px;opacity:.8;text-align:center;min-height:16px;}" +
-        ".ncm-now{display:flex;gap:14px;align-items:center;padding:10px 0;border-bottom:1px solid var(--dsh-border,#3f3f46);margin-bottom:10px;}" +
+        ".ncm-now{position:relative;overflow:hidden;border-radius:14px;margin-bottom:10px;}" +
+        ".ncm-nowBg{position:absolute;inset:-24px;background-size:cover;background-position:center;filter:blur(28px);transform:scale(1.15);opacity:.85;}" +
+        ".ncm-nowTint{position:absolute;inset:0;background:rgba(18,18,22,.5);}" +
+        ".ncm-nowGlass{position:relative;display:flex;gap:14px;align-items:center;padding:12px;background:rgba(28,28,34,.28);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);border:1px solid rgba(255,255,255,.07);}" +
         ".ncm-coverWrap{flex:0 0 auto;}" +
-        ".ncm-cover{width:64px;height:64px;border-radius:10px;object-fit:cover;display:block;background:rgba(128,128,128,.2);}" +
+        ".ncm-cover{width:64px;height:64px;border-radius:10px;object-fit:cover;display:block;background:rgba(128,128,128,.2);box-shadow:0 4px 14px rgba(0,0,0,.45);border:1px solid rgba(255,255,255,.12);}" +
         ".ncm-nowRight{flex:1;min-width:0;display:flex;flex-direction:column;gap:8px;}" +
         ".ncm-nowTitle{font-size:14px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}" +
         ".ncm-progRow{display:flex;align-items:center;gap:8px;}" +
@@ -462,6 +465,9 @@ window.__ModuleLoader__.load({
       }
 
       const nowEl = current ? React.createElement("div", { className: "ncm-now" },
+        current.picUrl ? React.createElement("div", { className: "ncm-nowBg", style: { backgroundImage: "url('" + httpsUrl(current.picUrl) + "')" } }) : null,
+        React.createElement("div", { className: "ncm-nowTint" }),
+        React.createElement("div", { className: "ncm-nowGlass" },
         React.createElement("div", { className: "ncm-coverWrap" },
           current.picUrl ? React.createElement("img", { className: "ncm-cover", src: httpsUrl(current.picUrl), alt: current.name, onError: function (e) { e.currentTarget.style.visibility = "hidden"; } }) : React.createElement("div", { className: "ncm-cover" }, "🎵"),
         ),
@@ -487,6 +493,7 @@ window.__ModuleLoader__.load({
           React.createElement("div", { className: "ncm-lyricToggle" },
             React.createElement("button", { className: "ncm-btn", onClick: function () { setLyricOpen(!lyricOpen); } }, lyricOpen ? "收起歌词" : "📜 歌词"),
           ),
+        ),
         ),
       ) : null;
 
