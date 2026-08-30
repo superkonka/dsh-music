@@ -158,6 +158,8 @@ window.__ModuleLoader__.load({
         ".ncm-songCover{width:34px;height:34px;border-radius:6px;object-fit:cover;flex:0 0 auto;background:rgba(128,128,128,.2);}" +
         ".ncm-songName{flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}" +
         ".ncm-songArtist{flex:0 1 auto;max-width:34%;font-size:12px;opacity:.65;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}" +
+        ".ncm-artistLink{cursor:pointer;}" +
+        ".ncm-artistLink:hover{color:#ec4141;text-decoration:underline;}" +
         ".ncm-songDur{flex:0 0 auto;font-size:11px;opacity:.5;}" +
         ".ncm-notice{font-size:12px;color:#e8a23a;margin-top:8px;}";
       document.head.appendChild(tag);
@@ -245,6 +247,7 @@ window.__ModuleLoader__.load({
       const [pickerSong, setPickerSong] = useState(null);
       const [creating, setCreating] = useState(false);
       const [createName, setCreateName] = useState("");
+      const [artistView, setArtistView] = useState(null);
       const [pls, setPls] = useState([]);
       const [plsLabel, setPlsLabel] = useState("");
       const [notice, setNotice] = useState("");
@@ -253,6 +256,7 @@ window.__ModuleLoader__.load({
       const currentRef = useRef(null);
       const modeRef = useRef(mode);
       const batchTimerRef = useRef(null);
+      const prevQueueRef = useRef([]);
 
       const current = idx >= 0 && queue[idx] ? queue[idx] : null;
       currentRef.current = current;
@@ -327,10 +331,12 @@ window.__ModuleLoader__.load({
       }
 
       function normSong(s) {
+        const ar = s.ar || s.artists || [];
         return {
           id: s.id,
           name: s.name,
-          artists: (s.ar || s.artists || []).map(function (a) { return a.name; }).join(" / "),
+          artists: ar.map(function (a) { return a.name; }).join(" / "),
+          artistsArr: ar.map(function (a) { return { id: a.id, name: a.name }; }),
           duration: s.dt || s.duration || 0,
           picUrl: (s.al && s.al.picUrl) || (s.album && s.album.picUrl) || "",
         };
@@ -534,6 +540,33 @@ window.__ModuleLoader__.load({
         setCreateName("");
       }
 
+      async function loadArtistSongs(aid, aname) {
+        setBusy(true); setNotice("");
+        try {
+          const j = await api("/artist/songs?id=" + aid + "&limit=50&timestamp=" + Date.now());
+          const list = (j.songs || []).map(normSong);
+          prevQueueRef.current = queue;
+          setArtistView({ id: aid, name: aname });
+          setQueue(list);
+          setPls([]); setPlsLabel("");
+          checkCached(list.map(function (s) { return s.id; }));
+          setIdx(-1);
+          if (!list.length) setNotice("该歌手暂无歌曲");
+        } catch (e) {
+          console.error("[ncm] loadArtistSongs", e);
+          setNotice("加载歌手歌曲失败：" + (e && e.message));
+        } finally {
+          setBusy(false);
+        }
+      }
+
+      function backFromArtist() {
+        setQueue(prevQueueRef.current);
+        setArtistView(null);
+        setIdx(-1);
+        setNotice("");
+      }
+
       function pollBatch() {
         api("/karaoke/batch/status?timestamp=" + Date.now())
           .then(function (s) {
@@ -705,6 +738,11 @@ window.__ModuleLoader__.load({
         })),
       ) : null;
 
+      const artistBar = artistView ? React.createElement("div", { className: "ncm-batchRow" },
+        React.createElement("button", { className: "ncm-btn", onClick: backFromArtist }, "← 返回"),
+        React.createElement("span", { className: "ncm-batchInfo" }, "🎤 " + artistView.name + " 的歌曲"),
+      ) : null;
+
       const batchBar = queue.length ? React.createElement("div", { className: "ncm-batchRow" },
         React.createElement("button", { className: "ncm-btn", onClick: startBatch, disabled: batchStatus && (batchStatus.running || batchStatus.remaining > 0) }, "🎵 离线处理歌单"),
         batchStatus && batchStatus.total > 0 ? React.createElement("span", { className: "ncm-batchInfo" },
@@ -723,7 +761,14 @@ window.__ModuleLoader__.load({
         return React.createElement("div", { key: s.id + "-" + i, className: "ncm-song" + (on ? " on" : ""), onClick: function () { playAt(i); } },
           s.picUrl ? React.createElement("img", { className: "ncm-songCover", src: httpsUrl(s.picUrl), alt: "", onError: function (e) { e.currentTarget.style.visibility = "hidden"; } }) : React.createElement("div", { className: "ncm-songCover" }),
           React.createElement("div", { className: "ncm-songName" }, s.name),
-          React.createElement("div", { className: "ncm-songArtist" }, s.artists),
+          React.createElement("div", { className: "ncm-songArtist" },
+            (s.artistsArr && s.artistsArr.length ? s.artistsArr : []).map(function (a, ai) {
+              return React.createElement("span", { key: ai },
+                ai > 0 ? " / " : null,
+                React.createElement("span", { className: "ncm-artistLink", title: "查看 " + a.name + " 的歌曲", onClick: function (e) { e.stopPropagation(); loadArtistSongs(a.id, a.name); } }, a.name),
+              );
+            }),
+          ),
           React.createElement("div", { className: "ncm-songDur" }, fmt(s.duration)),
           addBtn,
           kBtn,
@@ -756,7 +801,7 @@ window.__ModuleLoader__.load({
       ) : null;
 
       return React.createElement("div", null,
-        userRow, nowEl, lyricEl, searchRow, plEl, batchBar, songList, noticeEl, pickerEl,
+        userRow, nowEl, lyricEl, searchRow, plEl, artistBar, batchBar, songList, noticeEl, pickerEl,
         React.createElement("audio", {
           ref: audioRef, crossOrigin: "anonymous", style: { display: "none" },
           onPlay: function () { setPlaying(true); setNow(currentRef.current, true); },
