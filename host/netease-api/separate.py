@@ -5,16 +5,20 @@ Usage: python separate.py <input_audio> <cache_dir>
 
 Runs demucs two-stem separation (vocals + accompaniment), moves the
 accompaniment to <cache_dir>/no_vocals.wav, and prints its path.
+
+Uses os._exit so the process terminates even if torch leaves
+non-daemon threads behind.
 """
 import sys
+import os
 import shutil
 from pathlib import Path
 
 
 def main():
     if len(sys.argv) != 3:
-        print("usage: separate.py <input> <cache_dir>", file=sys.stderr)
-        sys.exit(2)
+        print("usage: separate.py <input> <cache_dir>", file=sys.stderr, flush=True)
+        os._exit(2)
 
     input_path = sys.argv[1]
     cache_dir = Path(sys.argv[2])
@@ -36,13 +40,14 @@ def main():
         src = found[0] if found else None
 
     if src is None:
-        print("no_vocals.wav not found", file=sys.stderr)
-        sys.exit(1)
+        print("no_vocals.wav not found", file=sys.stderr, flush=True)
+        os._exit(1)
 
     dst = cache_dir / "no_vocals.wav"
     shutil.move(str(src), str(dst))
     shutil.rmtree(str(cache_dir / "htdemucs"), ignore_errors=True)
-    print(str(dst))
+    print(str(dst), flush=True)
+    os._exit(0)
 
 
 if __name__ == "__main__":

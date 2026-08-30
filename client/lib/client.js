@@ -119,6 +119,8 @@ window.__ModuleLoader__.load({
         ".ncm-lyricLine{height:26px;line-height:26px;text-align:center;font-size:12px;opacity:.4;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}" +
         ".ncm-lyricLine.on{opacity:1;color:#ec4141;font-weight:600;}" +
         ".ncm-search{display:flex;gap:8px;margin-bottom:10px;}" +
+        ".ncm-batchRow{display:flex;align-items:center;gap:10px;margin-bottom:10px;}" +
+        ".ncm-batchInfo{font-size:11px;opacity:.7;}" +
         ".ncm-input{flex:1;min-width:0;border:1px solid var(--dsh-border,#52525b);background:transparent;color:inherit;border-radius:8px;padding:6px 10px;font-size:13px;outline:none;}" +
         ".ncm-sectLabel{font-size:11px;opacity:.6;margin:10px 0 6px;}" +
         ".ncm-row{display:flex;gap:6px;margin-bottom:8px;flex-wrap:wrap;}" +
@@ -138,6 +140,20 @@ window.__ModuleLoader__.load({
 
     function api(path) {
       return fetch(API + path).then(function (r) {
+        if (!r.ok) throw new Error("HTTP " + r.status);
+        return r.json();
+      }).catch(function (e) {
+        if (e && e.message && e.message.indexOf("fetch") !== -1) throw new Error("无法连接本地音乐服务(3000)");
+        throw e;
+      });
+    }
+
+    function apiPost(path, body) {
+      return fetch(API + path, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      }).then(function (r) {
         if (!r.ok) throw new Error("HTTP " + r.status);
         return r.json();
       }).catch(function (e) {
@@ -199,6 +215,7 @@ window.__ModuleLoader__.load({
       const [lyricOpen, setLyricOpen] = useState(false);
       const [karaokeOn, setKaraokeOn] = useState(false);
       const [karaokeBusy, setKaraokeBusy] = useState(false);
+      const [batchStatus, setBatchStatus] = useState(null);
       const [pls, setPls] = useState([]);
       const [plsLabel, setPlsLabel] = useState("");
       const [notice, setNotice] = useState("");
@@ -207,6 +224,7 @@ window.__ModuleLoader__.load({
       const currentRef = useRef(null);
       const modeRef = useRef(mode);
       const originalUrlRef = useRef("");
+      const batchTimerRef = useRef(null);
 
       const current = idx >= 0 && queue[idx] ? queue[idx] : null;
       currentRef.current = current;
@@ -427,6 +445,45 @@ window.__ModuleLoader__.load({
         }
       }
 
+      function pollBatch() {
+        api("/karaoke/batch/status?timestamp=" + Date.now())
+          .then(function (s) {
+            setBatchStatus(s);
+            if ((s.running || s.remaining > 0) && !batchTimerRef.current) {
+              batchTimerRef.current = setInterval(function () {
+                api("/karaoke/batch/status?timestamp=" + Date.now())
+                  .then(function (s2) {
+                    setBatchStatus(s2);
+                    if (!s2.running && s2.remaining === 0) {
+                      if (batchTimerRef.current) { clearInterval(batchTimerRef.current); batchTimerRef.current = null; }
+                    }
+                  })
+                  .catch(function () {});
+              }, 3000);
+            }
+          })
+          .catch(function () {});
+      }
+
+      function startBatch() {
+        const ids = queue.map(function (s) { return s.id; });
+        if (!ids.length) return;
+        apiPost("/karaoke/batch/start", { ids: ids })
+          .then(function (r) {
+            if (r.queued) {
+              setNotice("已加入 " + r.queued + " 首到离线处理队列");
+              pollBatch();
+            } else {
+              setNotice("这些歌都已处理过，K歌直接可用");
+              setBatchStatus({ total: 0, done: 0, remaining: 0, current: null, running: false });
+            }
+          })
+          .catch(function (e) {
+            console.error("[ncm] startBatch", e);
+            setNotice("离线处理启动失败：" + (e && e.message));
+          });
+      }
+
       function changeVolume(v) {
         setVolume(v);
         if (audioRef.current) audioRef.current.volume = v;
@@ -473,6 +530,7 @@ window.__ModuleLoader__.load({
         return function () {
           stopQr();
           if (audioRef.current) audioRef.current.pause();
+          if (batchTimerRef.current) { clearInterval(batchTimerRef.current); batchTimerRef.current = null; }
         };
       }, []);
 
@@ -557,6 +615,13 @@ window.__ModuleLoader__.load({
         })),
       ) : null;
 
+      const batchBar = queue.length ? React.createElement("div", { className: "ncm-batchRow" },
+        React.createElement("button", { className: "ncm-btn", onClick: startBatch, disabled: batchStatus && (batchStatus.running || batchStatus.remaining > 0) }, "🎵 离线处理歌单"),
+        batchStatus && batchStatus.total > 0 ? React.createElement("span", { className: "ncm-batchInfo" },
+          (batchStatus.running || batchStatus.remaining > 0) ? ("处理中 " + batchStatus.done + "/" + batchStatus.total) : ("已完成 " + batchStatus.done + " 首")
+        ) : null,
+      ) : null;
+
       const songList = queue.length ? React.createElement("div", { className: "ncm-list" }, queue.map(function (s, i) {
         const on = current && current.id === s.id;
         return React.createElement("div", { key: s.id + "-" + i, className: "ncm-song" + (on ? " on" : ""), onClick: function () { playAt(i); } },
@@ -570,7 +635,7 @@ window.__ModuleLoader__.load({
       const noticeEl = notice ? React.createElement("div", { className: "ncm-notice" }, notice) : null;
 
       return React.createElement("div", null,
-        userRow, nowEl, lyricEl, searchRow, plEl, songList, noticeEl,
+        userRow, nowEl, lyricEl, searchRow, plEl, batchBar, songList, noticeEl,
         React.createElement("audio", {
           ref: audioRef, crossOrigin: "anonymous", style: { display: "none" },
           onPlay: function () { setPlaying(true); setNow(currentRef.current, true); },

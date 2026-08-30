@@ -81,16 +81,64 @@ function download(url, dest, redirects) {
 
 function runSeparation(input, cacheDir) {
   return new Promise((resolve, reject) => {
+    const wavPath = path.join(cacheDir, 'no_vocals.wav')
     const child = spawn(PYTHON, [SEPARATE_SCRIPT, input, cacheDir], { windowsHide: true })
     let out = ''
+    let settled = false
     child.stdout.on('data', (c) => { out += c })
     child.stderr.on('data', () => {})
-    child.on('error', reject)
+    child.on('error', (e) => { if (!settled) { settled = true; reject(e) } })
     child.on('close', (code) => {
-      if (code === 0) resolve(out.trim().split(/\r?\n/).pop())
-      else reject(new Error('demucs exited ' + code))
+      if (settled) return
+      settled = true
+      if (code === 0) return resolve(out.trim().split(/\r?\n/).pop())
+      if (fs.existsSync(wavPath)) return resolve(wavPath)
+      reject(new Error('demucs exited ' + code))
     })
+    // Fallback: demucs/torch can hang on exit (non-daemon threads). Treat the
+    // presence of the produced wav as success and stop waiting.
+    const poll = setInterval(() => {
+      if (settled) { clearInterval(poll); return }
+      if (fs.existsSync(wavPath)) {
+        settled = true
+        clearInterval(poll)
+        resolve(wavPath)
+      }
+    }, 1500)
   })
+}
+
+// ---- karaoke batch queue (offline playlist pre-processing) ----
+const batch = { queue: [], done: [], total: 0, current: null, running: false }
+
+async function processOne(id) {
+  const dir = path.join(CACHE_DIR, String(id))
+  const wav = path.join(dir, 'no_vocals.wav')
+  if (fs.existsSync(wav)) return true
+  fs.mkdirSync(dir, { recursive: true })
+  const url = await getSongUrl(id)
+  if (!url) throw new Error('no playable url')
+  const mp3 = path.join(dir, 'song.mp3')
+  if (!fs.existsSync(mp3)) await download(url, mp3)
+  await runSeparation(mp3, dir)
+  return fs.existsSync(wav)
+}
+
+async function processBatch() {
+  if (batch.running) return
+  batch.running = true
+  while (batch.queue.length > 0) {
+    const id = batch.queue.shift()
+    batch.current = id
+    try {
+      await processOne(id)
+      batch.done.push(String(id))
+    } catch (e) {
+      console.error('[karaoke] batch item failed:', id, e && e.message)
+    }
+    batch.current = null
+  }
+  batch.running = false
 }
 
 serveNcmApi({ checkVersion: false, port: 3000 })
@@ -126,6 +174,33 @@ serveNcmApi({ checkVersion: false, port: 3000 })
       res.setHeader('Content-Type', 'audio/wav')
       res.setHeader('Access-Control-Allow-Origin', '*')
       fs.createReadStream(wav).pipe(res)
+    })
+
+    app.post('/karaoke/batch/start', (req, res) => {
+      const ids = (req.body && req.body.ids) || []
+      if (!Array.isArray(ids) || !ids.length) return res.status(400).json({ ok: false, error: 'no ids' })
+      const seen = new Set(batch.queue.concat(batch.done))
+      let added = 0
+      for (const id of ids) {
+        const key = String(id)
+        if (seen.has(key)) continue
+        seen.add(key)
+        batch.queue.push(key)
+        added++
+      }
+      batch.total += added
+      if (added) processBatch()
+      res.json({ ok: true, queued: added })
+    })
+
+    app.get('/karaoke/batch/status', (req, res) => {
+      res.json({
+        total: batch.total,
+        done: batch.done.length,
+        remaining: batch.queue.length,
+        current: batch.current,
+        running: batch.running,
+      })
     })
 
     console.log('[launch] NeteaseCloudMusicApi listening on :3000 (karaoke enabled)')
