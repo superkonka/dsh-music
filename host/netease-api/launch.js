@@ -41,9 +41,11 @@ Promise.race([
     console.log('[launch] anonymous token skipped:', err && err.message)
   })
 
-function getSongUrl(id) {
+function getSongUrl(id, cookie) {
   return new Promise((resolve, reject) => {
-    const req = http.get('http://127.0.0.1:3000/song/url/v1?id=' + encodeURIComponent(id) + '&level=standard', (res) => {
+    let url = 'http://127.0.0.1:3000/song/url/v1?id=' + encodeURIComponent(id) + '&level=exhigh'
+    if (cookie) url += '&cookie=' + encodeURIComponent(cookie)
+    const req = http.get(url, (res) => {
       let data = ''
       res.on('data', (c) => { data += c })
       res.on('end', () => {
@@ -109,14 +111,14 @@ function runSeparation(input, cacheDir) {
 }
 
 // ---- karaoke batch queue (offline playlist pre-processing) ----
-const batch = { queue: [], done: [], total: 0, current: null, running: false }
+const batch = { queue: [], done: [], total: 0, current: null, running: false, cookie: '' }
 
-async function processOne(id) {
+async function processOne(id, cookie) {
   const dir = path.join(CACHE_DIR, String(id))
   const wav = path.join(dir, 'no_vocals.wav')
   if (fs.existsSync(wav)) return true
   fs.mkdirSync(dir, { recursive: true })
-  const url = await getSongUrl(id)
+  const url = await getSongUrl(id, cookie)
   if (!url) throw new Error('no playable url')
   const mp3 = path.join(dir, 'song.mp3')
   if (!fs.existsSync(mp3)) await download(url, mp3)
@@ -131,7 +133,7 @@ async function processBatch() {
     const id = batch.queue.shift()
     batch.current = id
     try {
-      await processOne(id)
+      await processOne(id, batch.cookie)
       batch.done.push(String(id))
     } catch (e) {
       console.error('[karaoke] batch item failed:', id, e && e.message)
@@ -145,13 +147,14 @@ serveNcmApi({ checkVersion: false, port: 3000 })
   .then((app) => {
     app.get('/karaoke/prepare', async (req, res) => {
       const id = req.query.id
+      const cookie = req.query.cookie || ''
       if (!id) return res.status(400).json({ ok: false, error: 'missing id' })
       const dir = path.join(CACHE_DIR, String(id))
       const wav = path.join(dir, 'no_vocals.wav')
       try {
         if (!fs.existsSync(wav)) {
           fs.mkdirSync(dir, { recursive: true })
-          const url = await getSongUrl(id)
+          const url = await getSongUrl(id, cookie)
           if (!url) return res.status(404).json({ ok: false, error: 'no playable url' })
           const mp3 = path.join(dir, 'song.mp3')
           if (!fs.existsSync(mp3)) await download(url, mp3)
@@ -179,6 +182,7 @@ serveNcmApi({ checkVersion: false, port: 3000 })
     app.post('/karaoke/batch/start', (req, res) => {
       const ids = (req.body && req.body.ids) || []
       if (!Array.isArray(ids) || !ids.length) return res.status(400).json({ ok: false, error: 'no ids' })
+      if (req.body && req.body.cookie) batch.cookie = req.body.cookie
       const seen = new Set(batch.queue.concat(batch.done))
       let added = 0
       for (const id of ids) {

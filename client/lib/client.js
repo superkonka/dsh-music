@@ -433,7 +433,8 @@ window.__ModuleLoader__.load({
         setProcessingId(s.id);
         setNotice("正在为「" + s.name + "」生成伴奏…");
         try {
-          const j = await api("/karaoke/prepare?id=" + s.id + "&timestamp=" + Date.now());
+          const ck = cookie ? ("&cookie=" + encodeURIComponent(cookie)) : "";
+          const j = await api("/karaoke/prepare?id=" + s.id + ck + "&timestamp=" + Date.now());
           const url = j && j.url;
           if (!url) throw new Error("未获取到伴奏地址");
           setCachedIds(function (prev) { return prev.indexOf(String(s.id)) === -1 ? prev.concat([String(s.id)]) : prev; });
@@ -474,7 +475,7 @@ window.__ModuleLoader__.load({
       function startBatch() {
         const ids = queue.map(function (s) { return s.id; });
         if (!ids.length) return;
-        apiPost("/karaoke/batch/start", { ids: ids })
+        apiPost("/karaoke/batch/start", { ids: ids, cookie: cookie })
           .then(function (r) {
             if (r.queued) {
               setNotice("已加入 " + r.queued + " 首到离线处理队列");
