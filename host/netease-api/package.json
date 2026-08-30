@@ -1,0 +1,9 @@
+{
+  "name": "dsh-music-netease-api",
+  "version": "0.1.0",
+  "private": true,
+  "description": "NeteaseCloudMusicApi server launcher for dsh-music",
+  "dependencies": {
+    "NeteaseCloudMusicApi": "4.32.0"
+  }
+}
