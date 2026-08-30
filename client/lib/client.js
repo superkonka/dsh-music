@@ -100,16 +100,21 @@ window.__ModuleLoader__.load({
         ".ncm-qr{width:176px;height:176px;border-radius:12px;border:1px solid var(--dsh-border,#3f3f46);}" +
         ".ncm-msg{font-size:12px;opacity:.8;text-align:center;min-height:16px;}" +
         ".ncm-now{margin-bottom:12px;}" +
-        ".ncm-nowGlass{position:relative;display:flex;flex-direction:column;gap:12px;padding:14px 16px;background:rgba(30,30,38,.35);backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);border:1px solid rgba(255,255,255,.1);border-radius:14px;}" +
-        ".ncm-nowTop{display:flex;align-items:center;gap:12px;width:100%;}" +
-        ".ncm-nowTitle{font-size:14px;font-weight:600;flex:0 1 auto;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}" +
-        ".ncm-progRow{flex:1;display:flex;align-items:center;gap:8px;min-width:0;}" +
-        ".ncm-time{font-size:10px;opacity:.6;font-variant-numeric:tabular-nums;flex:0 0 auto;min-width:24px;text-align:center;}" +
-        ".ncm-progress{flex:1;height:14px;position:relative;cursor:pointer;}" +
-        ".ncm-progressTrack{position:absolute;left:0;right:0;top:50%;height:4px;transform:translateY(-50%);background:rgba(128,128,128,.28);border-radius:2px;}" +
-        ".ncm-progressFill{position:absolute;left:0;top:50%;height:4px;transform:translateY(-50%);background:#ec4141;border-radius:2px;pointer-events:none;}" +
-        ".ncm-progressThumb{position:absolute;top:50%;width:12px;height:12px;border-radius:50%;background:#ec4141;transform:translate(-50%,-50%);box-shadow:0 1px 5px rgba(0,0,0,.35);pointer-events:none;}" +
-        ".ncm-ctlRow{display:flex;align-items:center;justify-content:space-between;width:100%;}" +
+        ".ncm-nowGlass{position:relative;display:flex;flex-direction:column;gap:14px;padding:16px;background:rgba(30,30,38,.35);backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);border:1px solid rgba(255,255,255,.12);border-radius:14px;}" +
+        ".ncm-nowTitle{font-size:15px;font-weight:700;text-align:center;padding-bottom:12px;border-bottom:1px solid rgba(255,255,255,.1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}" +
+        ".ncm-progRow{display:flex;align-items:center;gap:10px;padding:0 2px;}" +
+        ".ncm-time{font-size:11px;opacity:.5;font-variant-numeric:tabular-nums;flex:0 0 auto;min-width:32px;text-align:center;transition:opacity .15s;}" +
+        ".ncm-time:first-child{text-align:left;}" +
+        ".ncm-time:last-child{text-align:right;}" +
+        ".ncm-progress{flex:1;height:20px;position:relative;cursor:pointer;}" +
+        ".ncm-progressTrack{position:absolute;left:0;right:0;top:50%;height:3px;transform:translateY(-50%);background:rgba(128,128,128,.22);border-radius:3px;transition:height .15s, background .15s;}" +
+        ".ncm-progressFill{position:absolute;left:0;top:50%;height:3px;transform:translateY(-50%);background:#ec4141;border-radius:3px;pointer-events:none;transition:height .15s;}" +
+        ".ncm-progressThumb{position:absolute;top:50%;width:14px;height:14px;border-radius:50%;background:#ec4141;transform:translate(-50%,-50%) scale(.5);box-shadow:0 1px 5px rgba(0,0,0,.35);pointer-events:none;opacity:0;transition:opacity .15s, transform .15s;}" +
+        ".ncm-progress:hover .ncm-progressTrack{height:5px;background:rgba(128,128,128,.38);}" +
+        ".ncm-progress:hover .ncm-progressFill{height:5px;}" +
+        ".ncm-progress:hover .ncm-progressThumb{opacity:1;transform:translate(-50%,-50%) scale(1);}" +
+        ".ncm-progRow:hover .ncm-time{opacity:.85;}" +
+        ".ncm-ctlRow{display:flex;align-items:center;justify-content:space-between;width:100%;padding-top:12px;border-top:1px solid rgba(255,255,255,.08);}" +
         ".ncm-lyricBtn{cursor:pointer;background:transparent;border:none;color:inherit;font-size:11px;opacity:.85;padding:2px 6px;flex:0 0 auto;}" +
         ".ncm-lyricBtn:hover{opacity:1;}" +
         ".ncm-ctlLeft{display:flex;align-items:center;gap:2px;}" +
@@ -690,13 +695,11 @@ window.__ModuleLoader__.load({
 
       const nowEl = current ? React.createElement("div", { className: "ncm-now" },
         React.createElement("div", { className: "ncm-nowGlass" },
-          React.createElement("div", { className: "ncm-nowTop" },
-            React.createElement("div", { className: "ncm-nowTitle" }, current.name + (current.artists ? " · " + current.artists : "")),
-            React.createElement("div", { className: "ncm-progRow" },
-              React.createElement("span", { className: "ncm-time" }, fmt(cur * 1000)),
-              React.createElement(ProgressBar, { cur: cur, dur: dur, onSeek: seek }),
-              React.createElement("span", { className: "ncm-time" }, fmt(dur * 1000)),
-            ),
+          React.createElement("div", { className: "ncm-nowTitle" }, current.name + (current.artists ? " · " + current.artists : "")),
+          React.createElement("div", { className: "ncm-progRow" },
+            React.createElement("span", { className: "ncm-time" }, fmt(cur * 1000)),
+            React.createElement(ProgressBar, { cur: cur, dur: dur, onSeek: seek }),
+            React.createElement("span", { className: "ncm-time" }, fmt(dur * 1000)),
           ),
           React.createElement("div", { className: "ncm-ctlRow" },
             React.createElement("div", { className: "ncm-ctlLeft" },
