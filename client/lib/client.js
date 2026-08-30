@@ -9,8 +9,21 @@ window.__ModuleLoader__.load({
 
     const API = "http://127.0.0.1:3000";
     const COOKIE_KEY = "dsh-ncm-cookie";
-    function saveCookie(ck) { try { if (ck) localStorage.setItem(COOKIE_KEY, ck); else localStorage.removeItem(COOKIE_KEY); } catch (e) {} }
-    function loadCookie() { try { return localStorage.getItem(COOKIE_KEY) || ""; } catch (e) { return ""; } }
+    function cleanCookie(raw) {
+      if (!raw) return "";
+      return String(raw).split(";").map(function (s) { return s.trim(); }).filter(function (s) {
+        if (s.indexOf("=") === -1) return false;
+        const name = s.split("=")[0].trim().toLowerCase();
+        if (name === "path" || name === "expires" || name === "max-age" || name === "domain" || name === "samesite" || name === "secure" || name === "httponly" || name === "priority") return false;
+        const val = s.slice(s.indexOf("=") + 1).trim();
+        return name !== "" && val !== "";
+      }).map(function (s) {
+        const i = s.indexOf("=");
+        return s.slice(0, i).trim() + "=" + s.slice(i + 1).trim();
+      }).join("; ");
+    }
+    function saveCookie(ck) { try { if (ck) localStorage.setItem(COOKIE_KEY, cleanCookie(ck)); else localStorage.removeItem(COOKIE_KEY); } catch (e) {} }
+    function loadCookie() { try { return cleanCookie(localStorage.getItem(COOKIE_KEY) || ""); } catch (e) { return ""; } }
 
     const MODES = [
       { id: "sequential", icon: "➡", title: "顺序播放" },
@@ -249,12 +262,18 @@ window.__ModuleLoader__.load({
         if (qrTimer.current) { clearInterval(qrTimer.current); qrTimer.current = null; }
       }
 
-      async function loadProfile(ck) {
+      async function loadProfile(ck, retries) {
+        if (retries === undefined) retries = 2;
         try {
-          const j = await api("/login/status?cookie=" + encodeURIComponent(ck) + "&timestamp=" + Date.now());
+          const j = await api("/login/status?cookie=" + encodeURIComponent(cleanCookie(ck)) + "&timestamp=" + Date.now());
           const p = j.data && j.data.profile;
-          if (p) setProfile({ nickname: p.nickname || "用户", userId: (j.data.account && j.data.account.id) || "" });
-        } catch (e) {}
+          if (p) { setProfile({ nickname: p.nickname || "用户", userId: (j.data.account && j.data.account.id) || "" }); return true; }
+          if (retries > 0) { await new Promise(function (r) { setTimeout(r, 1200); }); return loadProfile(ck, retries - 1); }
+          return false;
+        } catch (e) {
+          console.error("[ncm] loadProfile", e);
+          return false;
+        }
       }
 
       function pollQr(unikey) {
@@ -271,7 +290,7 @@ window.__ModuleLoader__.load({
                 setQr(function (q) { return Object.assign({}, q, { msg: "已扫码，请在手机上确认登录" }); });
               } else if (j.code === 803) {
                 stopQr();
-                const ck = j.cookie || "";
+                const ck = cleanCookie(j.cookie || "");
                 setCookie(ck);
                 saveCookie(ck);
                 setQr(function (q) { return Object.assign({}, q, { phase: "done", msg: "登录成功 ✓" }); });
