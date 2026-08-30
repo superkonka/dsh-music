@@ -174,9 +174,25 @@ serveNcmApi({ checkVersion: false, port: 3000 })
       const id = path.basename(req.params.name, '.wav')
       const wav = path.join(CACHE_DIR, id, 'no_vocals.wav')
       if (!fs.existsSync(wav)) return res.status(404).json({ error: 'not found' })
+      const stat = fs.statSync(wav)
+      const fileSize = stat.size
+      const range = req.headers.range
       res.setHeader('Content-Type', 'audio/wav')
       res.setHeader('Access-Control-Allow-Origin', '*')
-      fs.createReadStream(wav).pipe(res)
+      res.setHeader('Accept-Ranges', 'bytes')
+      if (range) {
+        const parts = String(range).replace(/bytes=/, '').split('-')
+        const start = parseInt(parts[0], 10) || 0
+        const end = parts[1] ? (parseInt(parts[1], 10) || (fileSize - 1)) : (fileSize - 1)
+        const chunkSize = end - start + 1
+        res.status(206)
+        res.setHeader('Content-Range', 'bytes ' + start + '-' + end + '/' + fileSize)
+        res.setHeader('Content-Length', chunkSize)
+        fs.createReadStream(wav, { start: start, end: end }).pipe(res)
+      } else {
+        res.setHeader('Content-Length', fileSize)
+        fs.createReadStream(wav).pipe(res)
+      }
     })
 
     app.post('/karaoke/batch/start', (req, res) => {
