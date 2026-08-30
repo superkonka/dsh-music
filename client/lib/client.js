@@ -67,13 +67,15 @@ window.__ModuleLoader__.load({
         ".ncm-pillPlay{width:28px;height:28px;border-radius:50%;border:none;background:#ec4141;color:#fff;font-size:13px;cursor:pointer;flex:0 0 auto;display:flex;align-items:center;justify-content:center;line-height:1;}" +
         ".ncm-pillPlay:hover{background:#d93434;}" +
         ".ncm-pillOpen{font-size:12px;opacity:.6;flex:0 0 auto;}" +
-        ".ncm-panel{pointer-events:auto;width:380px;max-width:94vw;max-height:min(680px,90vh);background:var(--dsh-surface,#1f1f23);color:var(--dsh-text,#e5e7eb);border:1px solid var(--dsh-border,#3f3f46);border-radius:14px;box-shadow:0 16px 50px rgba(0,0,0,.4);display:flex;flex-direction:column;overflow:hidden;}" +
+        ".ncm-panel{pointer-events:auto;position:relative;width:380px;max-width:94vw;max-height:min(680px,90vh);background:var(--dsh-surface,#1f1f23);color:var(--dsh-text,#e5e7eb);border:1px solid var(--dsh-border,#3f3f46);border-radius:14px;box-shadow:0 16px 50px rgba(0,0,0,.4);display:flex;flex-direction:column;overflow:hidden;}" +
+        ".ncm-panelBg{position:absolute;inset:-30px;background-size:cover;background-position:center;filter:blur(34px);transform:scale(1.2);opacity:.9;}" +
+        ".ncm-panelTint{position:absolute;inset:0;background:linear-gradient(180deg,rgba(16,16,22,.4),rgba(12,12,16,.72));}" +
         ".ncm-hidden{display:none;}" +
-        ".ncm-hd{display:flex;align-items:center;gap:8px;padding:11px 14px;border-bottom:1px solid var(--dsh-border,#3f3f46);}" +
+        ".ncm-hd{position:relative;z-index:1;display:flex;align-items:center;gap:8px;padding:11px 14px;background:rgba(18,18,24,.35);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);border-bottom:1px solid rgba(255,255,255,.06);}" +
         ".ncm-hdTitle{font-weight:600;font-size:14px;flex:1;}" +
         ".ncm-close{cursor:pointer;border:none;background:transparent;color:inherit;font-size:16px;line-height:1;opacity:.7;}" +
         ".ncm-close:hover{opacity:1;}" +
-        ".ncm-body{overflow:auto;padding:14px;}" +
+        ".ncm-body{position:relative;z-index:1;overflow:auto;padding:14px;background:rgba(15,15,20,.42);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);}" +
         ".ncm-userrow{display:flex;align-items:center;gap:8px;margin-bottom:12px;}" +
         ".ncm-username{font-size:12px;opacity:.7;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}" +
         ".ncm-btn{cursor:pointer;border:1px solid var(--dsh-border,#52525b);background:transparent;color:var(--dsh-text,#e5e7eb);border-radius:8px;padding:4px 10px;font-size:12px;line-height:1.4;}" +
@@ -84,10 +86,8 @@ window.__ModuleLoader__.load({
         ".ncm-login{display:flex;flex-direction:column;align-items:center;gap:10px;padding:16px 0;}" +
         ".ncm-qr{width:176px;height:176px;border-radius:12px;border:1px solid var(--dsh-border,#3f3f46);}" +
         ".ncm-msg{font-size:12px;opacity:.8;text-align:center;min-height:16px;}" +
-        ".ncm-now{position:relative;overflow:hidden;border-radius:14px;margin-bottom:10px;}" +
-        ".ncm-nowBg{position:absolute;inset:-24px;background-size:cover;background-position:center;filter:blur(28px);transform:scale(1.15);opacity:.85;}" +
-        ".ncm-nowTint{position:absolute;inset:0;background:rgba(18,18,24,.4);}" +
-        ".ncm-nowGlass{position:relative;display:flex;flex-direction:column;gap:12px;padding:14px 16px;background:rgba(26,26,32,.32);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);border:1px solid rgba(255,255,255,.07);}" +
+        ".ncm-now{margin-bottom:12px;}" +
+        ".ncm-nowGlass{position:relative;display:flex;flex-direction:column;gap:12px;padding:14px 16px;background:rgba(30,30,38,.35);backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);border:1px solid rgba(255,255,255,.1);border-radius:14px;}" +
         ".ncm-nowTop{display:flex;align-items:center;gap:12px;width:100%;}" +
         ".ncm-nowTitle{font-size:14px;font-weight:600;flex:0 1 auto;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}" +
         ".ncm-progRow{flex:1;display:flex;align-items:center;gap:8px;min-width:0;}" +
@@ -464,8 +464,6 @@ window.__ModuleLoader__.load({
       }
 
       const nowEl = current ? React.createElement("div", { className: "ncm-now" },
-        current.picUrl ? React.createElement("div", { className: "ncm-nowBg", style: { backgroundImage: "url('" + httpsUrl(current.picUrl) + "')" } }) : null,
-        React.createElement("div", { className: "ncm-nowTint" }),
         React.createElement("div", { className: "ncm-nowGlass" },
           React.createElement("div", { className: "ncm-nowTop" },
             React.createElement("div", { className: "ncm-nowTitle" }, current.name + (current.artists ? " · " + current.artists : "")),
@@ -584,6 +582,8 @@ window.__ModuleLoader__.load({
           React.createElement("span", { className: "ncm-pillOpen" }, "⤢"),
         ),
         React.createElement("div", { className: "ncm-panel" + (open ? "" : " ncm-hidden") },
+          now.song && now.song.picUrl ? React.createElement("div", { className: "ncm-panelBg", style: { backgroundImage: "url('" + httpsUrl(now.song.picUrl) + "')" } }) : null,
+          now.song ? React.createElement("div", { className: "ncm-panelTint" }) : null,
           React.createElement("div", { className: "ncm-hd", onPointerDown: startDrag, title: "拖动移动窗口" },
             React.createElement("span", { className: "ncm-hdTitle" }, "🎵 网易云音乐"),
             React.createElement("button", { className: "ncm-close", onClick: function () { if (movedRef.current) { movedRef.current = false; return; } setOpen(false); }, title: "收起" }, "✕"),
