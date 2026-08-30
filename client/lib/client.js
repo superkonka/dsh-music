@@ -105,6 +105,16 @@ window.__ModuleLoader__.load({
         ".ncm-muteBtn{cursor:pointer;background:transparent;border:1px solid var(--dsh-border,#52525b);color:inherit;font-size:10px;padding:1px 6px;border-radius:6px;flex:0 0 auto;opacity:.8;white-space:nowrap;}" +
         ".ncm-muteBtn:hover{opacity:1;background:rgba(128,128,128,.12);}" +
         ".ncm-muteBtn:disabled{opacity:.4;cursor:default;}" +
+        ".ncm-addBtn{cursor:pointer;background:transparent;border:1px solid var(--dsh-border,#52525b);color:inherit;font-size:13px;width:22px;height:22px;border-radius:6px;display:flex;align-items:center;justify-content:center;flex:0 0 auto;opacity:.75;line-height:1;}" +
+        ".ncm-addBtn:hover{opacity:1;background:rgba(128,128,128,.12);}" +
+        ".ncm-pickerOverlay{position:fixed;inset:0;z-index:10000;background:rgba(0,0,0,.45);display:flex;align-items:center;justify-content:center;}" +
+        ".ncm-pickerPanel{background:var(--dsh-surface,#1f1f23);color:var(--dsh-text,#e5e7eb);border:1px solid var(--dsh-border,#3f3f46);border-radius:12px;width:300px;max-width:90vw;max-height:70vh;display:flex;flex-direction:column;padding:14px;box-shadow:0 20px 60px rgba(0,0,0,.5);}" +
+        ".ncm-pickerTitle{font-weight:600;font-size:14px;margin-bottom:10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}" +
+        ".ncm-pickerList{max-height:260px;overflow:auto;margin-bottom:10px;}" +
+        ".ncm-pickerItem{cursor:pointer;padding:8px 10px;border-radius:8px;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}" +
+        ".ncm-pickerItem:hover{background:rgba(128,128,128,.12);}" +
+        ".ncm-pickerCreate{display:flex;gap:8px;align-items:center;}" +
+        ".ncm-pickerCreate .ncm-input{flex:1;}" +
         ".ncm-ctlCenter{display:flex;align-items:center;gap:10px;}" +
         ".ncm-ctlBtn{cursor:pointer;background:transparent;border:none;color:inherit;width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;color:var(--dsh-text,#e5e7eb);}" +
         ".ncm-ctlBtn:hover{background:rgba(128,128,128,.12);}" +
@@ -218,6 +228,10 @@ window.__ModuleLoader__.load({
       const [cachedIds, setCachedIds] = useState([]);
       const [processingId, setProcessingId] = useState(null);
       const [batchStatus, setBatchStatus] = useState(null);
+      const [myPlaylists, setMyPlaylists] = useState([]);
+      const [pickerSong, setPickerSong] = useState(null);
+      const [creating, setCreating] = useState(false);
+      const [createName, setCreateName] = useState("");
       const [pls, setPls] = useState([]);
       const [plsLabel, setPlsLabel] = useState("");
       const [notice, setNotice] = useState("");
@@ -335,6 +349,7 @@ window.__ModuleLoader__.load({
         try {
           const j = await api("/user/playlist?uid=" + profile.userId + "&cookie=" + encodeURIComponent(cookie) + "&timestamp=" + Date.now());
           const list = (j.playlist || []).map(function (p) { return { id: p.id, name: p.name, count: p.trackCount || 0 }; });
+          setMyPlaylists(list);
           setPls(list); setPlsLabel(list.length ? "我的歌单" : "");
           if (!list.length) setNotice("没有找到歌单");
         } catch (e) {
@@ -449,6 +464,52 @@ window.__ModuleLoader__.load({
         } finally {
           setProcessingId(null);
         }
+      }
+
+      async function createPlaylist(name) {
+        const j = await api("/playlist/create?name=" + encodeURIComponent(name) + "&cookie=" + encodeURIComponent(cookie) + "&timestamp=" + Date.now());
+        const newId = j && (j.id || (j.playlist && j.playlist.id) || (j.data && j.data.id));
+        if (!newId) throw new Error("创建失败");
+        return { id: newId, name: name };
+      }
+
+      async function addToPlaylist(songId, pid) {
+        const j = await api("/playlist/tracks?op=add&pid=" + pid + "&tracks=" + songId + "&cookie=" + encodeURIComponent(cookie) + "&timestamp=" + Date.now());
+        if (j && (j.code === 200 || j.code === 502)) return true;
+        throw new Error((j && j.message) || "添加失败");
+      }
+
+      async function doAddToPlaylist(song, pl) {
+        setNotice("");
+        try {
+          await addToPlaylist(song.id, pl.id);
+          setNotice("已加入「" + pl.name + "」");
+          setPickerSong(null); setCreating(false); setCreateName("");
+        } catch (e) {
+          setNotice("加入失败：" + (e && e.message));
+        }
+      }
+
+      async function doCreateAndAdd(song) {
+        const n = (createName || "").trim();
+        if (!n) { setNotice("请输入歌单名称"); return; }
+        setNotice("");
+        try {
+          const pl = await createPlaylist(n);
+          if (song) { await addToPlaylist(song.id, pl.id); }
+          setNotice(song ? ("已创建「" + n + "」并加入歌曲") : ("已创建歌单「" + n + "」"));
+          setPickerSong(null); setCreating(false); setCreateName("");
+          loadMyPlaylists();
+        } catch (e) {
+          console.error("[ncm] createPlaylist", e);
+          setNotice("创建失败：" + (e && e.message));
+        }
+      }
+
+      function openPicker(song) {
+        setPickerSong(song);
+        setCreating(false);
+        setCreateName("");
       }
 
       function pollBatch() {
@@ -612,6 +673,7 @@ window.__ModuleLoader__.load({
         React.createElement("input", { className: "ncm-input", value: keyword, placeholder: "搜索歌曲、歌手…", onChange: function (e) { setKeyword(e.target.value); }, onKeyDown: function (e) { if (e.key === "Enter") doSearch(); } }),
         React.createElement("button", { className: "ncm-btn ncm-primary", onClick: doSearch, disabled: busy }, busy ? "…" : "搜索"),
         React.createElement("button", { className: "ncm-btn", onClick: loadMyPlaylists, disabled: busy }, profile ? "我的歌单" : "登录后歌单"),
+        React.createElement("button", { className: "ncm-btn", onClick: function () { if (!profile) { setShowLogin(true); return; } setPickerSong(null); setCreating(true); setCreateName(""); }, title: "新建歌单", disabled: busy }, "＋"),
       );
 
       const plEl = pls.length ? React.createElement("div", null,
@@ -635,19 +697,44 @@ window.__ModuleLoader__.load({
         const kBtn = cached
           ? React.createElement("button", { className: "ncm-kBtn", onClick: function (e) { e.stopPropagation(); playInstrumental(s, i); }, title: "播放伴奏" }, "K")
           : React.createElement("button", { className: "ncm-muteBtn", onClick: function (e) { e.stopPropagation(); generateInstrumental(s, i); }, disabled: processing, title: "生成并播放伴奏" }, processing ? "…" : "消音");
+        const addBtn = React.createElement("button", { className: "ncm-addBtn", onClick: function (e) { e.stopPropagation(); if (!profile) { setShowLogin(true); return; } openPicker(s); }, title: "加入歌单" }, "＋");
         return React.createElement("div", { key: s.id + "-" + i, className: "ncm-song" + (on ? " on" : ""), onClick: function () { playAt(i); } },
           s.picUrl ? React.createElement("img", { className: "ncm-songCover", src: httpsUrl(s.picUrl), alt: "", onError: function (e) { e.currentTarget.style.visibility = "hidden"; } }) : React.createElement("div", { className: "ncm-songCover" }),
           React.createElement("div", { className: "ncm-songName" }, s.name),
           React.createElement("div", { className: "ncm-songArtist" }, s.artists),
           React.createElement("div", { className: "ncm-songDur" }, fmt(s.duration)),
+          addBtn,
           kBtn,
         );
       })) : null;
 
       const noticeEl = notice ? React.createElement("div", { className: "ncm-notice" }, notice) : null;
 
+      const pickerOpen = !!pickerSong || creating;
+      const pickerEl = pickerOpen ? React.createElement("div", { className: "ncm-pickerOverlay", onClick: function () { setPickerSong(null); setCreating(false); setCreateName(""); } },
+        React.createElement("div", { className: "ncm-pickerPanel", onClick: function (e) { e.stopPropagation(); } },
+          React.createElement("div", { className: "ncm-pickerTitle" }, pickerSong ? ("加入歌单 · " + pickerSong.name) : "新建歌单"),
+          creating
+            ? React.createElement("div", { className: "ncm-pickerCreate" },
+                React.createElement("input", { className: "ncm-input", value: createName, placeholder: "输入歌单名称", autoFocus: true, onChange: function (e) { setCreateName(e.target.value); }, onKeyDown: function (e) { if (e.key === "Enter") doCreateAndAdd(pickerSong); } }),
+                React.createElement("button", { className: "ncm-btn ncm-primary", onClick: function () { doCreateAndAdd(pickerSong); } }, pickerSong ? "创建并加入" : "创建"),
+                React.createElement("button", { className: "ncm-btn", onClick: function () { setCreating(false); if (!pickerSong) { setPickerSong(null); setCreateName(""); } } }, "取消"),
+              )
+            : React.createElement("div", null,
+                React.createElement("div", { className: "ncm-pickerList" },
+                  myPlaylists.length
+                    ? myPlaylists.map(function (pl) {
+                        return React.createElement("div", { key: pl.id, className: "ncm-pickerItem", onClick: function () { doAddToPlaylist(pickerSong, pl); } }, "♪ " + pl.name + " (" + pl.count + ")");
+                      })
+                    : React.createElement("div", { className: "ncm-msg" }, "还没有歌单，点下方新建"),
+                ),
+                React.createElement("button", { className: "ncm-btn", onClick: function () { setCreating(true); } }, "＋ 新建歌单"),
+              ),
+        ),
+      ) : null;
+
       return React.createElement("div", null,
-        userRow, nowEl, lyricEl, searchRow, plEl, batchBar, songList, noticeEl,
+        userRow, nowEl, lyricEl, searchRow, plEl, batchBar, songList, noticeEl, pickerEl,
         React.createElement("audio", {
           ref: audioRef, crossOrigin: "anonymous", style: { display: "none" },
           onPlay: function () { setPlaying(true); setNow(currentRef.current, true); },
