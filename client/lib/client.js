@@ -84,30 +84,29 @@ window.__ModuleLoader__.load({
         ".ncm-login{display:flex;flex-direction:column;align-items:center;gap:10px;padding:16px 0;}" +
         ".ncm-qr{width:176px;height:176px;border-radius:12px;border:1px solid var(--dsh-border,#3f3f46);}" +
         ".ncm-msg{font-size:12px;opacity:.8;text-align:center;min-height:16px;}" +
-        ".ncm-now{display:flex;flex-direction:column;align-items:center;padding:6px 0 14px;border-bottom:1px solid var(--dsh-border,#3f3f46);margin-bottom:12px;text-align:center;}" +
+        ".ncm-now{display:flex;flex-direction:column;align-items:center;padding:4px 0 12px;border-bottom:1px solid var(--dsh-border,#3f3f46);margin-bottom:10px;text-align:center;}" +
         ".ncm-coverWrap{flex:0 0 auto;}" +
-        ".ncm-cover{width:120px;height:120px;border-radius:12px;object-fit:cover;display:block;background:rgba(128,128,128,.2);box-shadow:0 10px 28px rgba(0,0,0,.3);}" +
-        ".ncm-nowTitle{font-size:16px;font-weight:600;margin-top:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;}" +
-        ".ncm-nowArtist{font-size:13px;opacity:.65;margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;}" +
-        ".ncm-progRow{display:flex;align-items:center;gap:10px;margin-top:16px;width:100%;}" +
+        ".ncm-cover{width:112px;height:112px;border-radius:12px;object-fit:cover;display:block;background:rgba(128,128,128,.2);box-shadow:0 10px 28px rgba(0,0,0,.3);}" +
+        ".ncm-nowTitle{font-size:15px;font-weight:600;margin-top:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;}" +
+        ".ncm-progRow{display:flex;align-items:center;gap:10px;margin-top:12px;width:100%;}" +
         ".ncm-time{font-size:11px;opacity:.65;font-variant-numeric:tabular-nums;flex:0 0 auto;min-width:32px;text-align:center;}" +
         ".ncm-progress{flex:1;height:18px;position:relative;cursor:pointer;}" +
         ".ncm-progressTrack{position:absolute;left:0;right:0;top:50%;height:4px;transform:translateY(-50%);background:rgba(128,128,128,.28);border-radius:2px;}" +
         ".ncm-progressFill{position:absolute;left:0;top:50%;height:4px;transform:translateY(-50%);background:#ec4141;border-radius:2px;pointer-events:none;}" +
         ".ncm-progressThumb{position:absolute;top:50%;width:12px;height:12px;border-radius:50%;background:#ec4141;transform:translate(-50%,-50%);box-shadow:0 1px 5px rgba(0,0,0,.35);pointer-events:none;}" +
-        ".ncm-ctlRow{display:flex;align-items:center;justify-content:center;gap:22px;margin-top:14px;}" +
-        ".ncm-ctlBtn{cursor:pointer;background:transparent;border:none;color:inherit;width:38px;height:38px;border-radius:50%;display:flex;align-items:center;justify-content:center;color:var(--dsh-text,#e5e7eb);}" +
+        ".ncm-ctlRow{display:flex;align-items:center;justify-content:space-between;margin-top:10px;width:100%;}" +
+        ".ncm-ctlCenter{display:flex;align-items:center;gap:16px;}" +
+        ".ncm-ctlBtn{cursor:pointer;background:transparent;border:none;color:inherit;width:36px;height:36px;border-radius:50%;display:flex;align-items:center;justify-content:center;color:var(--dsh-text,#e5e7eb);}" +
         ".ncm-ctlBtn:hover{background:rgba(128,128,128,.12);}" +
-        ".ncm-ctlMain{width:46px;height:46px;background:#ec4141;color:#fff;}" +
+        ".ncm-ctlMain{width:44px;height:44px;background:#ec4141;color:#fff;}" +
         ".ncm-ctlMain:hover{background:#d93434;}" +
         ".ncm-ctlBtn svg,.ncm-ctlMain svg{display:block;}" +
-        ".ncm-subRow{display:flex;align-items:center;justify-content:center;gap:14px;margin-top:12px;}" +
-        ".ncm-mode{cursor:pointer;background:transparent;border:none;color:inherit;font-size:17px;width:30px;height:30px;display:flex;align-items:center;justify-content:center;opacity:.85;}" +
+        ".ncm-mode{cursor:pointer;background:transparent;border:none;color:inherit;font-size:17px;width:26px;display:flex;align-items:center;justify-content:center;opacity:.85;}" +
         ".ncm-mode:hover{opacity:1;}" +
-        ".ncm-volWrap{display:flex;align-items:center;gap:6px;}" +
+        ".ncm-volWrap{display:flex;align-items:center;gap:4px;}" +
         ".ncm-volIcon{display:flex;align-items:center;}" +
-        ".ncm-vol{width:88px;accent-color:#ec4141;cursor:pointer;}" +
-        ".ncm-lyricToggle{margin-top:12px;display:flex;justify-content:center;}" +
+        ".ncm-vol{width:78px;accent-color:#ec4141;cursor:pointer;}" +
+        ".ncm-lyricToggle{margin-top:10px;display:flex;justify-content:center;}" +
         ".ncm-lyricBox{height:130px;overflow:hidden;position:relative;margin-top:10px;border-top:1px solid var(--dsh-border,#3f3f46);}" +
         ".ncm-lyricInner{transition:transform .4s ease;padding:0 4px;}" +
         ".ncm-lyricLine{height:26px;line-height:26px;text-align:center;font-size:12px;opacity:.4;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}" +
@@ -465,20 +464,19 @@ window.__ModuleLoader__.load({
         React.createElement("div", { className: "ncm-coverWrap" },
           current.picUrl ? React.createElement("img", { className: "ncm-cover", src: httpsUrl(current.picUrl), alt: current.name, onError: function (e) { e.currentTarget.style.visibility = "hidden"; } }) : React.createElement("div", { className: "ncm-cover" }, "🎵"),
         ),
-        React.createElement("div", { className: "ncm-nowTitle" }, current.name),
-        React.createElement("div", { className: "ncm-nowArtist" }, current.artists),
+        React.createElement("div", { className: "ncm-nowTitle" }, current.name + (current.artists ? " · " + current.artists : "")),
         React.createElement("div", { className: "ncm-progRow" },
           React.createElement("span", { className: "ncm-time" }, fmt(cur * 1000)),
           React.createElement(ProgressBar, { cur: cur, dur: dur, onSeek: seek }),
           React.createElement("span", { className: "ncm-time" }, fmt(dur * 1000)),
         ),
         React.createElement("div", { className: "ncm-ctlRow" },
-          React.createElement("button", { className: "ncm-ctlBtn", onClick: playPrev, title: "上一首" }, React.createElement(Icon, { d: ICONS.prev })),
-          React.createElement("button", { className: "ncm-ctlBtn ncm-ctlMain", onClick: togglePlay, title: "播放/暂停" }, React.createElement(Icon, { d: playing ? ICONS.pause : ICONS.play, size: 24 })),
-          React.createElement("button", { className: "ncm-ctlBtn", onClick: playNext, title: "下一首" }, React.createElement(Icon, { d: ICONS.next })),
-        ),
-        React.createElement("div", { className: "ncm-subRow" },
           React.createElement("button", { className: "ncm-mode", onClick: cycleMode, title: modeTitle(mode) }, modeIcon(mode)),
+          React.createElement("div", { className: "ncm-ctlCenter" },
+            React.createElement("button", { className: "ncm-ctlBtn", onClick: playPrev, title: "上一首" }, React.createElement(Icon, { d: ICONS.prev })),
+            React.createElement("button", { className: "ncm-ctlBtn ncm-ctlMain", onClick: togglePlay, title: "播放/暂停" }, React.createElement(Icon, { d: playing ? ICONS.pause : ICONS.play, size: 24 })),
+            React.createElement("button", { className: "ncm-ctlBtn", onClick: playNext, title: "下一首" }, React.createElement(Icon, { d: ICONS.next })),
+          ),
           React.createElement("div", { className: "ncm-volWrap" },
             React.createElement("span", { className: "ncm-volIcon", style: { opacity: .7 } }, React.createElement(Icon, { d: ICONS.volume, size: 15 })),
             React.createElement("input", { type: "range", className: "ncm-vol", min: 0, max: 100, value: Math.round(volume * 100), onChange: function (e) { changeVolume(Number(e.target.value) / 100); } }),
