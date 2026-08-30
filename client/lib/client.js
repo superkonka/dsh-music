@@ -99,6 +99,10 @@ window.__ModuleLoader__.load({
         ".ncm-ctlRow{display:flex;align-items:center;justify-content:space-between;width:100%;}" +
         ".ncm-lyricBtn{cursor:pointer;background:transparent;border:none;color:inherit;font-size:11px;opacity:.85;padding:2px 6px;flex:0 0 auto;}" +
         ".ncm-lyricBtn:hover{opacity:1;}" +
+        ".ncm-ctlLeft{display:flex;align-items:center;gap:2px;}" +
+        ".ncm-karaokeBtn{cursor:pointer;background:transparent;border:none;color:inherit;font-size:11px;opacity:.85;padding:2px 7px;border-radius:6px;white-space:nowrap;}" +
+        ".ncm-karaokeBtn:hover{opacity:1;}" +
+        ".ncm-karaokeBtn.on{color:#ec4141;background:rgba(236,65,65,.16);font-weight:600;}" +
         ".ncm-ctlCenter{display:flex;align-items:center;gap:10px;}" +
         ".ncm-ctlBtn{cursor:pointer;background:transparent;border:none;color:inherit;width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;color:var(--dsh-text,#e5e7eb);}" +
         ".ncm-ctlBtn:hover{background:rgba(128,128,128,.12);}" +
@@ -193,6 +197,7 @@ window.__ModuleLoader__.load({
       const [mode, setMode] = useState("repeat-all");
       const [lyric, setLyric] = useState([]);
       const [lyricOpen, setLyricOpen] = useState(false);
+      const [karaokeOn, setKaraokeOn] = useState(false);
       const [pls, setPls] = useState([]);
       const [plsLabel, setPlsLabel] = useState("");
       const [notice, setNotice] = useState("");
@@ -200,6 +205,8 @@ window.__ModuleLoader__.load({
       const qrTimer = useRef(null);
       const currentRef = useRef(null);
       const modeRef = useRef(mode);
+      const audioCtxRef = useRef(null);
+      const karaokeNodesRef = useRef(null);
 
       const current = idx >= 0 && queue[idx] ? queue[idx] : null;
       currentRef.current = current;
@@ -383,6 +390,87 @@ window.__ModuleLoader__.load({
         if (a && isFinite(sec)) { try { a.currentTime = sec; setCur(sec); } catch (e) {} }
       }
 
+      function ensureAudioGraph() {
+        if (audioCtxRef.current) return true;
+        const a = audioRef.current;
+        if (!a) return false;
+        const AC = window.AudioContext || window.webkitAudioContext;
+        if (!AC) return false;
+        try {
+          const ctx = new AC();
+          const source = ctx.createMediaElementSource(a);
+          const splitter = ctx.createChannelSplitter(2);
+          const merger = ctx.createChannelMerger(2);
+          source.connect(splitter);
+
+          // dry path (normal stereo)
+          const dryL = ctx.createGain(); dryL.gain.value = 1;
+          const dryR = ctx.createGain(); dryR.gain.value = 1;
+          splitter.connect(dryL, 0); dryL.connect(merger, 0, 0);
+          splitter.connect(dryR, 1); dryR.connect(merger, 0, 1);
+
+          // side = (L - R) / 2  (removes center vocals)
+          const sideNode = ctx.createGain();
+          const sL = ctx.createGain(); sL.gain.value = 0.5;
+          const sR = ctx.createGain(); sR.gain.value = -0.5;
+          splitter.connect(sL, 0); splitter.connect(sR, 1);
+          sL.connect(sideNode); sR.connect(sideNode);
+
+          // low mid = lowpass((L + R) / 2)  (restores some bass/kick)
+          const midNode = ctx.createGain();
+          const mL = ctx.createGain(); mL.gain.value = 0.5;
+          const mR = ctx.createGain(); mR.gain.value = 0.5;
+          splitter.connect(mL, 0); splitter.connect(mR, 1);
+          mL.connect(midNode); mR.connect(midNode);
+          const lowpass = ctx.createBiquadFilter();
+          lowpass.type = "lowpass"; lowpass.frequency.value = 150;
+          const bassGain = ctx.createGain(); bassGain.gain.value = 0.85;
+          midNode.connect(lowpass); lowpass.connect(bassGain);
+
+          const karaokeSum = ctx.createGain();
+          sideNode.connect(karaokeSum);
+          bassGain.connect(karaokeSum);
+          const karaokeGain = ctx.createGain(); karaokeGain.gain.value = 0;
+          karaokeSum.connect(karaokeGain);
+          karaokeGain.connect(merger, 0, 0);
+          karaokeGain.connect(merger, 0, 1);
+
+          merger.connect(ctx.destination);
+
+          audioCtxRef.current = ctx;
+          karaokeNodesRef.current = { dryL: dryL, dryR: dryR, karaokeGain: karaokeGain };
+          return true;
+        } catch (e) {
+          console.error("[ncm] audio graph setup failed", e);
+          return false;
+        }
+      }
+
+      function applyKaraoke(on) {
+        const nodes = karaokeNodesRef.current;
+        const ctx = audioCtxRef.current;
+        if (!nodes || !ctx) return;
+        const t = 0.05;
+        const dry = on ? 0 : 1;
+        const k = on ? 1 : 0;
+        const now = ctx.currentTime;
+        nodes.dryL.gain.setTargetAtTime(dry, now, t);
+        nodes.dryR.gain.setTargetAtTime(dry, now, t);
+        nodes.karaokeGain.gain.setTargetAtTime(k, now, t);
+      }
+
+      function toggleKaraoke() {
+        if (karaokeOn) {
+          setKaraokeOn(false);
+          applyKaraoke(false);
+          return;
+        }
+        if (!ensureAudioGraph()) { setNotice("当前浏览器不支持实时消音"); return; }
+        if (audioCtxRef.current) { audioCtxRef.current.resume().catch(function () {}); }
+        setKaraokeOn(true);
+        applyKaraoke(true);
+      }
+
       function changeVolume(v) {
         setVolume(v);
         if (audioRef.current) audioRef.current.volume = v;
@@ -429,6 +517,7 @@ window.__ModuleLoader__.load({
         return function () {
           stopQr();
           if (audioRef.current) audioRef.current.pause();
+          if (audioCtxRef.current) { try { audioCtxRef.current.close(); } catch (e) {} }
         };
       }, []);
 
@@ -474,7 +563,10 @@ window.__ModuleLoader__.load({
             ),
           ),
           React.createElement("div", { className: "ncm-ctlRow" },
-            React.createElement("button", { className: "ncm-lyricBtn", onClick: function () { setLyricOpen(!lyricOpen); } }, lyricOpen ? "歌词 ✕" : "📜 歌词"),
+            React.createElement("div", { className: "ncm-ctlLeft" },
+              React.createElement("button", { className: "ncm-lyricBtn", onClick: function () { setLyricOpen(!lyricOpen); } }, lyricOpen ? "歌词 ✕" : "📜 歌词"),
+              React.createElement("button", { className: "ncm-karaokeBtn" + (karaokeOn ? " on" : ""), onClick: toggleKaraoke, title: "K歌模式（实时消除人声）" }, karaokeOn ? "🎤 K歌中" : "🎤 K歌"),
+            ),
             React.createElement("div", { className: "ncm-ctlCenter" },
               React.createElement("button", { className: "ncm-mode", onClick: cycleMode, title: modeTitle(mode) }, modeIcon(mode)),
               React.createElement("button", { className: "ncm-ctlBtn", onClick: playPrev, title: "上一首" }, React.createElement(Icon, { d: ICONS.prev })),
@@ -525,7 +617,7 @@ window.__ModuleLoader__.load({
       return React.createElement("div", null,
         userRow, nowEl, lyricEl, searchRow, plEl, songList, noticeEl,
         React.createElement("audio", {
-          ref: audioRef, style: { display: "none" },
+          ref: audioRef, crossOrigin: "anonymous", style: { display: "none" },
           onPlay: function () { setPlaying(true); setNow(currentRef.current, true); },
           onPause: function () { setPlaying(false); setNow(currentRef.current, false); },
           onEnded: function () { playNext(); },
