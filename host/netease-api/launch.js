@@ -203,6 +203,15 @@ serveNcmApi({ checkVersion: false, port: 3000 })
       })
     })
 
+    app.get('/karaoke/check', (req, res) => {
+      const ids = String(req.query.ids || '').split(',').filter(Boolean)
+      const cached = []
+      for (const id of ids) {
+        if (fs.existsSync(path.join(CACHE_DIR, id, 'no_vocals.wav'))) cached.push(id)
+      }
+      res.json({ cached: cached })
+    })
+
     console.log('[launch] NeteaseCloudMusicApi listening on :3000 (karaoke enabled)')
   })
   .catch((err) => {

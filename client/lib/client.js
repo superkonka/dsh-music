@@ -100,9 +100,11 @@ window.__ModuleLoader__.load({
         ".ncm-lyricBtn{cursor:pointer;background:transparent;border:none;color:inherit;font-size:11px;opacity:.85;padding:2px 6px;flex:0 0 auto;}" +
         ".ncm-lyricBtn:hover{opacity:1;}" +
         ".ncm-ctlLeft{display:flex;align-items:center;gap:2px;}" +
-        ".ncm-karaokeBtn{cursor:pointer;background:transparent;border:none;color:inherit;font-size:11px;opacity:.85;padding:2px 7px;border-radius:6px;white-space:nowrap;}" +
-        ".ncm-karaokeBtn:hover{opacity:1;}" +
-        ".ncm-karaokeBtn.on{color:#ec4141;background:rgba(236,65,65,.16);font-weight:600;}" +
+        ".ncm-kBtn{cursor:pointer;background:#ec4141;border:none;color:#fff;font-size:11px;font-weight:700;padding:2px 8px;border-radius:6px;flex:0 0 auto;}" +
+        ".ncm-kBtn:hover{background:#d93434;}" +
+        ".ncm-muteBtn{cursor:pointer;background:transparent;border:1px solid var(--dsh-border,#52525b);color:inherit;font-size:10px;padding:1px 6px;border-radius:6px;flex:0 0 auto;opacity:.8;white-space:nowrap;}" +
+        ".ncm-muteBtn:hover{opacity:1;background:rgba(128,128,128,.12);}" +
+        ".ncm-muteBtn:disabled{opacity:.4;cursor:default;}" +
         ".ncm-ctlCenter{display:flex;align-items:center;gap:10px;}" +
         ".ncm-ctlBtn{cursor:pointer;background:transparent;border:none;color:inherit;width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;color:var(--dsh-text,#e5e7eb);}" +
         ".ncm-ctlBtn:hover{background:rgba(128,128,128,.12);}" +
@@ -213,8 +215,8 @@ window.__ModuleLoader__.load({
       const [mode, setMode] = useState("repeat-all");
       const [lyric, setLyric] = useState([]);
       const [lyricOpen, setLyricOpen] = useState(false);
-      const [karaokeOn, setKaraokeOn] = useState(false);
-      const [karaokeBusy, setKaraokeBusy] = useState(false);
+      const [cachedIds, setCachedIds] = useState([]);
+      const [processingId, setProcessingId] = useState(null);
       const [batchStatus, setBatchStatus] = useState(null);
       const [pls, setPls] = useState([]);
       const [plsLabel, setPlsLabel] = useState("");
@@ -223,7 +225,6 @@ window.__ModuleLoader__.load({
       const qrTimer = useRef(null);
       const currentRef = useRef(null);
       const modeRef = useRef(mode);
-      const originalUrlRef = useRef("");
       const batchTimerRef = useRef(null);
 
       const current = idx >= 0 && queue[idx] ? queue[idx] : null;
@@ -315,6 +316,7 @@ window.__ModuleLoader__.load({
           const songs = (j1.result && j1.result.songs) || [];
           const plsRes = (j2.result && j2.result.playlists) || [];
           setQueue(songs.map(normSong));
+          checkCached(songs.map(function (s) { return s.id; }));
           setPls(plsRes.map(function (p) { return { id: p.id, name: p.name, count: p.trackCount || 0 }; }));
           setPlsLabel(plsRes.length ? "相关歌单" : "");
           setIdx(-1);
@@ -349,6 +351,7 @@ window.__ModuleLoader__.load({
           const j = await api("/playlist/track/all?id=" + pl.id + "&cookie=" + encodeURIComponent(cookie) + "&limit=200&timestamp=" + Date.now());
           const list = (j.songs || []).map(normSong);
           setQueue(list); setIdx(-1);
+          checkCached(list.map(function (s) { return s.id; }));
           setPls([]); setPlsLabel("");
           if (!list.length) setNotice("歌单里没有歌曲");
           else setNotice("已加载「" + pl.name + "」" + list.length + " 首");
@@ -383,9 +386,6 @@ window.__ModuleLoader__.load({
           setCur(0); setDur(song.duration ? song.duration / 1000 : 0);
           setNow(song, false);
           setLyric([]);
-          setKaraokeOn(false);
-          setKaraokeBusy(false);
-          originalUrlRef.current = u;
           loadLyric(song.id);
           const a = audioRef.current;
           if (a) {
@@ -411,37 +411,42 @@ window.__ModuleLoader__.load({
         if (a && isFinite(sec)) { try { a.currentTime = sec; setCur(sec); } catch (e) {} }
       }
 
-      async function toggleKaraoke() {
-        const song = currentRef.current;
+      function checkCached(ids) {
+        if (!ids || !ids.length) { setCachedIds([]); return; }
+        api("/karaoke/check?ids=" + ids.map(String).join(",") + "&timestamp=" + Date.now())
+          .then(function (j) { setCachedIds((j && j.cached) || []); })
+          .catch(function () {});
+      }
+
+      function playInstrumental(s, i) {
+        setIdx(i);
+        setNow(s, true);
         const a = audioRef.current;
-        if (!song || !a) return;
-        if (karaokeOn) {
-          const t = a.currentTime;
-          a.src = originalUrlRef.current || "";
-          a.play().catch(function () {});
-          try { a.currentTime = t; } catch (e) {}
-          setKaraokeOn(false);
-          setNotice("");
-          return;
-        }
-        setKaraokeBusy(true);
-        setKaraokeOn(true);
-        setNotice("正在生成伴奏…（首次需等待，之后秒开）");
+        if (!a) return;
+        a.src = API + "/karaoke/file/" + s.id + ".wav";
+        a.play().catch(function () {});
+        setNotice("");
+      }
+
+      async function generateInstrumental(s, i) {
+        if (processingId) return;
+        setProcessingId(s.id);
+        setNotice("正在为「" + s.name + "」生成伴奏…");
         try {
-          const j = await api("/karaoke/prepare?id=" + song.id + "&timestamp=" + Date.now());
+          const j = await api("/karaoke/prepare?id=" + s.id + "&timestamp=" + Date.now());
           const url = j && j.url;
           if (!url) throw new Error("未获取到伴奏地址");
-          const t = a.currentTime;
-          a.src = API + url;
-          a.play().catch(function () {});
-          try { a.currentTime = t; } catch (e) {}
+          setCachedIds(function (prev) { return prev.indexOf(String(s.id)) === -1 ? prev.concat([String(s.id)]) : prev; });
+          setIdx(i);
+          setNow(s, true);
+          const a = audioRef.current;
+          if (a) { a.src = API + url; a.play().catch(function () {}); }
           setNotice("");
         } catch (e) {
-          console.error("[ncm] karaoke", e);
+          console.error("[ncm] generateInstrumental", e);
           setNotice("生成伴奏失败：" + (e && e.message));
-          setKaraokeOn(false);
         } finally {
-          setKaraokeBusy(false);
+          setProcessingId(null);
         }
       }
 
@@ -456,6 +461,7 @@ window.__ModuleLoader__.load({
                     setBatchStatus(s2);
                     if (!s2.running && s2.remaining === 0) {
                       if (batchTimerRef.current) { clearInterval(batchTimerRef.current); batchTimerRef.current = null; }
+                      checkCached(queue.map(function (x) { return x.id; }));
                     }
                   })
                   .catch(function () {});
@@ -578,7 +584,6 @@ window.__ModuleLoader__.load({
           React.createElement("div", { className: "ncm-ctlRow" },
             React.createElement("div", { className: "ncm-ctlLeft" },
               React.createElement("button", { className: "ncm-lyricBtn", onClick: function () { setLyricOpen(!lyricOpen); } }, lyricOpen ? "歌词 ✕" : "📜 歌词"),
-              React.createElement("button", { className: "ncm-karaokeBtn" + (karaokeOn ? " on" : ""), onClick: toggleKaraoke, disabled: karaokeBusy, title: "K歌模式（生成纯伴奏）" }, karaokeBusy ? "🎤 生成中…" : (karaokeOn ? "🎤 K歌中" : "🎤 K歌")),
             ),
             React.createElement("div", { className: "ncm-ctlCenter" },
               React.createElement("button", { className: "ncm-mode", onClick: cycleMode, title: modeTitle(mode) }, modeIcon(mode)),
@@ -624,11 +629,17 @@ window.__ModuleLoader__.load({
 
       const songList = queue.length ? React.createElement("div", { className: "ncm-list" }, queue.map(function (s, i) {
         const on = current && current.id === s.id;
+        const cached = cachedIds.indexOf(String(s.id)) !== -1;
+        const processing = processingId === s.id;
+        const kBtn = cached
+          ? React.createElement("button", { className: "ncm-kBtn", onClick: function (e) { e.stopPropagation(); playInstrumental(s, i); }, title: "播放伴奏" }, "K")
+          : React.createElement("button", { className: "ncm-muteBtn", onClick: function (e) { e.stopPropagation(); generateInstrumental(s, i); }, disabled: processing, title: "生成并播放伴奏" }, processing ? "…" : "消音");
         return React.createElement("div", { key: s.id + "-" + i, className: "ncm-song" + (on ? " on" : ""), onClick: function () { playAt(i); } },
           s.picUrl ? React.createElement("img", { className: "ncm-songCover", src: httpsUrl(s.picUrl), alt: "", onError: function (e) { e.currentTarget.style.visibility = "hidden"; } }) : React.createElement("div", { className: "ncm-songCover" }),
           React.createElement("div", { className: "ncm-songName" }, s.name),
           React.createElement("div", { className: "ncm-songArtist" }, s.artists),
           React.createElement("div", { className: "ncm-songDur" }, fmt(s.duration)),
+          kBtn,
         );
       })) : null;
 
