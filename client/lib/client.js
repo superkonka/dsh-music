@@ -198,6 +198,7 @@ window.__ModuleLoader__.load({
       const [lyric, setLyric] = useState([]);
       const [lyricOpen, setLyricOpen] = useState(false);
       const [karaokeOn, setKaraokeOn] = useState(false);
+      const [karaokeBusy, setKaraokeBusy] = useState(false);
       const [pls, setPls] = useState([]);
       const [plsLabel, setPlsLabel] = useState("");
       const [notice, setNotice] = useState("");
@@ -205,8 +206,7 @@ window.__ModuleLoader__.load({
       const qrTimer = useRef(null);
       const currentRef = useRef(null);
       const modeRef = useRef(mode);
-      const audioCtxRef = useRef(null);
-      const karaokeNodesRef = useRef(null);
+      const originalUrlRef = useRef("");
 
       const current = idx >= 0 && queue[idx] ? queue[idx] : null;
       currentRef.current = current;
@@ -365,6 +365,9 @@ window.__ModuleLoader__.load({
           setCur(0); setDur(song.duration ? song.duration / 1000 : 0);
           setNow(song, false);
           setLyric([]);
+          setKaraokeOn(false);
+          setKaraokeBusy(false);
+          originalUrlRef.current = u;
           loadLyric(song.id);
           const a = audioRef.current;
           if (a) {
@@ -390,85 +393,38 @@ window.__ModuleLoader__.load({
         if (a && isFinite(sec)) { try { a.currentTime = sec; setCur(sec); } catch (e) {} }
       }
 
-      function ensureAudioGraph() {
-        if (audioCtxRef.current) return true;
+      async function toggleKaraoke() {
+        const song = currentRef.current;
         const a = audioRef.current;
-        if (!a) return false;
-        const AC = window.AudioContext || window.webkitAudioContext;
-        if (!AC) return false;
-        try {
-          const ctx = new AC();
-          const source = ctx.createMediaElementSource(a);
-          const splitter = ctx.createChannelSplitter(2);
-          const merger = ctx.createChannelMerger(2);
-          source.connect(splitter);
-
-          // dry path (normal stereo)
-          const dryL = ctx.createGain(); dryL.gain.value = 1;
-          const dryR = ctx.createGain(); dryR.gain.value = 1;
-          splitter.connect(dryL, 0); dryL.connect(merger, 0, 0);
-          splitter.connect(dryR, 1); dryR.connect(merger, 0, 1);
-
-          // side = (L - R) / 2  (removes center vocals)
-          const sideNode = ctx.createGain();
-          const sL = ctx.createGain(); sL.gain.value = 0.5;
-          const sR = ctx.createGain(); sR.gain.value = -0.5;
-          splitter.connect(sL, 0); splitter.connect(sR, 1);
-          sL.connect(sideNode); sR.connect(sideNode);
-
-          // low mid = lowpass((L + R) / 2)  (restores some bass/kick)
-          const midNode = ctx.createGain();
-          const mL = ctx.createGain(); mL.gain.value = 0.5;
-          const mR = ctx.createGain(); mR.gain.value = 0.5;
-          splitter.connect(mL, 0); splitter.connect(mR, 1);
-          mL.connect(midNode); mR.connect(midNode);
-          const lowpass = ctx.createBiquadFilter();
-          lowpass.type = "lowpass"; lowpass.frequency.value = 150;
-          const bassGain = ctx.createGain(); bassGain.gain.value = 0.85;
-          midNode.connect(lowpass); lowpass.connect(bassGain);
-
-          const karaokeSum = ctx.createGain();
-          sideNode.connect(karaokeSum);
-          bassGain.connect(karaokeSum);
-          const karaokeGain = ctx.createGain(); karaokeGain.gain.value = 0;
-          karaokeSum.connect(karaokeGain);
-          karaokeGain.connect(merger, 0, 0);
-          karaokeGain.connect(merger, 0, 1);
-
-          merger.connect(ctx.destination);
-
-          audioCtxRef.current = ctx;
-          karaokeNodesRef.current = { dryL: dryL, dryR: dryR, karaokeGain: karaokeGain };
-          return true;
-        } catch (e) {
-          console.error("[ncm] audio graph setup failed", e);
-          return false;
-        }
-      }
-
-      function applyKaraoke(on) {
-        const nodes = karaokeNodesRef.current;
-        const ctx = audioCtxRef.current;
-        if (!nodes || !ctx) return;
-        const t = 0.05;
-        const dry = on ? 0 : 1;
-        const k = on ? 1 : 0;
-        const now = ctx.currentTime;
-        nodes.dryL.gain.setTargetAtTime(dry, now, t);
-        nodes.dryR.gain.setTargetAtTime(dry, now, t);
-        nodes.karaokeGain.gain.setTargetAtTime(k, now, t);
-      }
-
-      function toggleKaraoke() {
+        if (!song || !a) return;
         if (karaokeOn) {
+          const t = a.currentTime;
+          a.src = originalUrlRef.current || "";
+          a.play().catch(function () {});
+          try { a.currentTime = t; } catch (e) {}
           setKaraokeOn(false);
-          applyKaraoke(false);
+          setNotice("");
           return;
         }
-        if (!ensureAudioGraph()) { setNotice("当前浏览器不支持实时消音"); return; }
-        if (audioCtxRef.current) { audioCtxRef.current.resume().catch(function () {}); }
+        setKaraokeBusy(true);
         setKaraokeOn(true);
-        applyKaraoke(true);
+        setNotice("正在生成伴奏…（首次需等待，之后秒开）");
+        try {
+          const j = await api("/karaoke/prepare?id=" + song.id + "&timestamp=" + Date.now());
+          const url = j && j.url;
+          if (!url) throw new Error("未获取到伴奏地址");
+          const t = a.currentTime;
+          a.src = API + url;
+          a.play().catch(function () {});
+          try { a.currentTime = t; } catch (e) {}
+          setNotice("");
+        } catch (e) {
+          console.error("[ncm] karaoke", e);
+          setNotice("生成伴奏失败：" + (e && e.message));
+          setKaraokeOn(false);
+        } finally {
+          setKaraokeBusy(false);
+        }
       }
 
       function changeVolume(v) {
@@ -517,7 +473,6 @@ window.__ModuleLoader__.load({
         return function () {
           stopQr();
           if (audioRef.current) audioRef.current.pause();
-          if (audioCtxRef.current) { try { audioCtxRef.current.close(); } catch (e) {} }
         };
       }, []);
 
@@ -565,7 +520,7 @@ window.__ModuleLoader__.load({
           React.createElement("div", { className: "ncm-ctlRow" },
             React.createElement("div", { className: "ncm-ctlLeft" },
               React.createElement("button", { className: "ncm-lyricBtn", onClick: function () { setLyricOpen(!lyricOpen); } }, lyricOpen ? "歌词 ✕" : "📜 歌词"),
-              React.createElement("button", { className: "ncm-karaokeBtn" + (karaokeOn ? " on" : ""), onClick: toggleKaraoke, title: "K歌模式（实时消除人声）" }, karaokeOn ? "🎤 K歌中" : "🎤 K歌"),
+              React.createElement("button", { className: "ncm-karaokeBtn" + (karaokeOn ? " on" : ""), onClick: toggleKaraoke, disabled: karaokeBusy, title: "K歌模式（生成纯伴奏）" }, karaokeBusy ? "🎤 生成中…" : (karaokeOn ? "🎤 K歌中" : "🎤 K歌")),
             ),
             React.createElement("div", { className: "ncm-ctlCenter" },
               React.createElement("button", { className: "ncm-mode", onClick: cycleMode, title: modeTitle(mode) }, modeIcon(mode)),
