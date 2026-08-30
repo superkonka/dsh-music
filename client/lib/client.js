@@ -494,17 +494,20 @@ window.__ModuleLoader__.load({
 
       async function addToPlaylist(songId, pid) {
         const j = await api("/playlist/tracks?op=add&pid=" + pid + "&tracks=" + songId + "&cookie=" + encodeURIComponent(cookie) + "&timestamp=" + Date.now());
-        if (j && (j.code === 200 || j.code === 502)) return true;
-        throw new Error((j && j.message) || "添加失败");
+        console.log("[ncm] addToPlaylist response", j);
+        const code = j && (j.code !== undefined ? j.code : (j.body && j.body.code));
+        if (code === 200 || code === 502) return true;
+        throw new Error((j && (j.message || j.msg)) || ("code " + code));
       }
 
       async function doAddToPlaylist(song, pl) {
-        setNotice("");
         try {
           await addToPlaylist(song.id, pl.id);
-          setNotice("已加入「" + pl.name + "」");
           setPickerSong(null); setCreating(false); setCreateName("");
+          setNotice("已加入「" + pl.name + "」");
         } catch (e) {
+          console.error("[ncm] doAddToPlaylist", e);
+          setPickerSong(null); setCreating(false); setCreateName("");
           setNotice("加入失败：" + (e && e.message));
         }
       }
@@ -512,15 +515,15 @@ window.__ModuleLoader__.load({
       async function doCreateAndAdd(song) {
         const n = (createName || "").trim();
         if (!n) { setNotice("请输入歌单名称"); return; }
-        setNotice("");
         try {
           const pl = await createPlaylist(n);
           if (song) { await addToPlaylist(song.id, pl.id); }
-          setNotice(song ? ("已创建「" + n + "」并加入歌曲") : ("已创建歌单「" + n + "」"));
           setPickerSong(null); setCreating(false); setCreateName("");
+          setNotice(song ? ("已创建「" + n + "」并加入歌曲") : ("已创建歌单「" + n + "」"));
           loadMyPlaylists();
         } catch (e) {
-          console.error("[ncm] createPlaylist", e);
+          console.error("[ncm] doCreateAndAdd", e);
+          setPickerSong(null); setCreating(false); setCreateName("");
           setNotice("创建失败：" + (e && e.message));
         }
       }
