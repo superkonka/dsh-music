@@ -841,6 +841,7 @@ window.__ModuleLoader__.load({
       const [pos, setPos] = useState({ top: 12, right: 76 });
       const movedRef = useRef(false);
       const dragRef = useRef(null);
+      const widgetRef = useRef(null);
       const now = useNow();
 
       function clamp(v, lo, hi) { return v < lo ? lo : (v > hi ? hi : v); }
@@ -848,14 +849,24 @@ window.__ModuleLoader__.load({
       function startDrag(e) {
         if (e.button !== 0) return;
         movedRef.current = false;
-        dragRef.current = { sx: e.clientX, sy: e.clientY, top: pos.top, right: pos.right };
+        const el = widgetRef.current;
+        const r = el ? el.getBoundingClientRect() : null;
+        const w = r && r.width ? r.width : 200;
+        const h = r && r.height ? r.height : 48;
+        const M = 8;
+        dragRef.current = {
+          sx: e.clientX, sy: e.clientY,
+          top: pos.top, right: pos.right,
+          maxTop: Math.max(M, window.innerHeight - h - M),
+          maxRight: Math.max(M, window.innerWidth - w - M),
+        };
         const move = function (ev) {
           const s = dragRef.current;
           if (!s) return;
           const dx = ev.clientX - s.sx;
           const dy = ev.clientY - s.sy;
           if (!movedRef.current && (Math.abs(dx) > 3 || Math.abs(dy) > 3)) movedRef.current = true;
-          if (movedRef.current) setPos({ top: clamp(s.top + dy, 8, 460), right: clamp(s.right - dx, 8, 380) });
+          if (movedRef.current) setPos({ top: clamp(s.top + dy, M, s.maxTop), right: clamp(s.right - dx, M, s.maxRight) });
         };
         const up = function () {
           dragRef.current = null;
@@ -871,9 +882,28 @@ window.__ModuleLoader__.load({
         setOpen(true);
       }
 
+      useEffect(function () {
+        function onResize() {
+          const el = widgetRef.current;
+          const r = el ? el.getBoundingClientRect() : null;
+          const w = r && r.width ? r.width : 200;
+          const h = r && r.height ? r.height : 48;
+          const M = 8;
+          const maxTop = Math.max(M, window.innerHeight - h - M);
+          const maxRight = Math.max(M, window.innerWidth - w - M);
+          setPos(function (p) {
+            const t = clamp(p.top, M, maxTop);
+            const rr = clamp(p.right, M, maxRight);
+            return (t === p.top && rr === p.right) ? p : { top: t, right: rr };
+          });
+        }
+        window.addEventListener("resize", onResize);
+        return function () { window.removeEventListener("resize", onResize); };
+      }, []);
+
       const posStyle = { top: pos.top + "px", right: pos.right + "px" };
 
-      return ReactDOM.createPortal(React.createElement("div", { className: "ncm-widget", style: posStyle },
+      return ReactDOM.createPortal(React.createElement("div", { className: "ncm-widget", style: posStyle, ref: widgetRef },
         open ? null : React.createElement("div", { className: "ncm-pill", onClick: openPanel, title: "网易云音乐（拖动⠿移动，点击展开）" },
           React.createElement("span", { className: "ncm-drag", onPointerDown: startDrag, title: "拖动" }, "⠿"),
           now.song && now.song.picUrl ? React.createElement("img", { className: "ncm-pillCover", src: httpsUrl(now.song.picUrl), alt: "", onError: function (e) { e.currentTarget.style.visibility = "hidden"; } }) : React.createElement("span", { className: "ncm-pillCover", style: { display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14 } }, "🎵"),
