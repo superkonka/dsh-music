@@ -5,6 +5,7 @@ window.__ModuleLoader__.load({
     var exports = module.exports;
     Object.defineProperty(exports, Symbol.toStringTag, { value: "Module" });
     const React = require("react");
+    const ReactDOM = require("react-dom");
     const { useState, useEffect, useRef } = React;
 
     const API = "http://127.0.0.1:3000";
@@ -71,7 +72,7 @@ window.__ModuleLoader__.load({
       const tag = document.createElement("style");
       tag.dataset.pluginCss = id;
       tag.textContent = "" +
-        ".ncm-widget{position:fixed;z-index:9990;pointer-events:none;user-select:none;}" +
+        ".ncm-widget{position:fixed;z-index:99999;pointer-events:none;user-select:none;}" +
         ".ncm-pill{pointer-events:auto;display:flex;align-items:center;gap:7px;padding:5px 8px 5px 5px;border-radius:999px;border:1px solid var(--dsh-border,#3f3f46);background:var(--dsh-surface,#1f1f23);color:var(--dsh-text,#e5e7eb);box-shadow:0 4px 16px rgba(0,0,0,.28);cursor:pointer;max-width:360px;}" +
         ".ncm-drag{flex:0 0 auto;cursor:grab;opacity:.55;font-size:13px;padding:0 2px;touch-action:none;}" +
         ".ncm-drag:active{cursor:grabbing;}" +
@@ -872,7 +873,7 @@ window.__ModuleLoader__.load({
 
       const posStyle = { top: pos.top + "px", right: pos.right + "px" };
 
-      return React.createElement("div", { className: "ncm-widget", style: posStyle },
+      return ReactDOM.createPortal(React.createElement("div", { className: "ncm-widget", style: posStyle },
         open ? null : React.createElement("div", { className: "ncm-pill", onClick: openPanel, title: "网易云音乐（拖动⠿移动，点击展开）" },
           React.createElement("span", { className: "ncm-drag", onPointerDown: startDrag, title: "拖动" }, "⠿"),
           now.song && now.song.picUrl ? React.createElement("img", { className: "ncm-pillCover", src: httpsUrl(now.song.picUrl), alt: "", onError: function (e) { e.currentTarget.style.visibility = "hidden"; } }) : React.createElement("span", { className: "ncm-pillCover", style: { display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14 } }, "🎵"),
@@ -889,7 +890,7 @@ window.__ModuleLoader__.load({
           ),
           React.createElement("div", { className: "ncm-body" }, React.createElement(Player, null)),
         ),
-      );
+      ), document.body);
     }
 
     exports.name = "dsh-client-ui-music";
