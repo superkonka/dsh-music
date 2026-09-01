@@ -6,7 +6,7 @@ window.__ModuleLoader__.load({
     Object.defineProperty(exports, Symbol.toStringTag, { value: "Module" });
     const React = require("react");
     const ReactDOM = require("react-dom");
-    const { useState, useEffect, useRef } = React;
+    const { useState, useEffect, useRef, useLayoutEffect } = React;
 
     const API = "http://127.0.0.1:3000";
     const COOKIE_KEY = "dsh-ncm-cookie";
@@ -838,13 +838,38 @@ window.__ModuleLoader__.load({
 
     function MusicWidget() {
       const [open, setOpen] = useState(false);
+      const [panelUp, setPanelUp] = useState(false);
       const [pos, setPos] = useState({ top: 12, right: 76 });
       const movedRef = useRef(false);
       const dragRef = useRef(null);
       const widgetRef = useRef(null);
+      const panelRef = useRef(null);
+      const panelHRef = useRef(0);
       const now = useNow();
 
       function clamp(v, lo, hi) { return v < lo ? lo : (v > hi ? hi : v); }
+
+      // Decide whether the expanded panel fits below the pill; if not, flip it
+      // upward. Re-run when the panel's own size changes (async content grows
+      // the list) so a late-expanding panel still stays on-screen.
+      useLayoutEffect(function () {
+        if (!open) return;
+        const panel = panelRef.current;
+        if (!panel) return;
+        function reflow() {
+          const h = panel.offsetHeight;
+          panelHRef.current = h;
+          const M = 8;
+          setPanelUp(pos.top + h + M > window.innerHeight);
+        }
+        reflow();
+        let ro = null;
+        if (typeof ResizeObserver !== "undefined") {
+          ro = new ResizeObserver(function () { reflow(); });
+          ro.observe(panel);
+        }
+        return function () { if (ro) ro.disconnect(); };
+      }, [open]);
 
       function startDrag(e) {
         if (e.button !== 0) return;
@@ -854,10 +879,12 @@ window.__ModuleLoader__.load({
         const w = r && r.width ? r.width : 200;
         const h = r && r.height ? r.height : 48;
         const M = 8;
+        const isUp = open && panelUp;
         dragRef.current = {
           sx: e.clientX, sy: e.clientY,
           top: pos.top, right: pos.right,
-          maxTop: Math.max(M, window.innerHeight - h - M),
+          minTop: isUp ? M + h : M,
+          maxTop: isUp ? window.innerHeight - M : Math.max(M, window.innerHeight - h - M),
           maxRight: Math.max(M, window.innerWidth - w - M),
         };
         const move = function (ev) {
@@ -866,20 +893,26 @@ window.__ModuleLoader__.load({
           const dx = ev.clientX - s.sx;
           const dy = ev.clientY - s.sy;
           if (!movedRef.current && (Math.abs(dx) > 3 || Math.abs(dy) > 3)) movedRef.current = true;
-          if (movedRef.current) setPos({ top: clamp(s.top + dy, M, s.maxTop), right: clamp(s.right - dx, M, s.maxRight) });
+          if (movedRef.current) setPos({ top: clamp(s.top + dy, s.minTop, s.maxTop), right: clamp(s.right - dx, M, s.maxRight) });
         };
-        const up = function () {
+        const finish = function () {
           dragRef.current = null;
           window.removeEventListener("pointermove", move);
-          window.removeEventListener("pointerup", up);
+          window.removeEventListener("pointerup", finish);
         };
         window.addEventListener("pointermove", move);
-        window.addEventListener("pointerup", up);
+        window.addEventListener("pointerup", finish);
       }
 
       function openPanel() {
         if (movedRef.current) { movedRef.current = false; return; }
         setOpen(true);
+      }
+
+      function closePanel() {
+        if (movedRef.current) { movedRef.current = false; return; }
+        setOpen(false);
+        setPanelUp(false);
       }
 
       useEffect(function () {
@@ -889,19 +922,22 @@ window.__ModuleLoader__.load({
           const w = r && r.width ? r.width : 200;
           const h = r && r.height ? r.height : 48;
           const M = 8;
-          const maxTop = Math.max(M, window.innerHeight - h - M);
+          const isUp = open && panelUp;
+          const minTop = isUp ? M + h : M;
+          const maxTop = isUp ? window.innerHeight - M : Math.max(M, window.innerHeight - h - M);
           const maxRight = Math.max(M, window.innerWidth - w - M);
           setPos(function (p) {
-            const t = clamp(p.top, M, maxTop);
+            const t = clamp(p.top, minTop, maxTop);
             const rr = clamp(p.right, M, maxRight);
             return (t === p.top && rr === p.right) ? p : { top: t, right: rr };
           });
         }
         window.addEventListener("resize", onResize);
         return function () { window.removeEventListener("resize", onResize); };
-      }, []);
+      }, [open, panelUp]);
 
-      const posStyle = { top: pos.top + "px", right: pos.right + "px" };
+      const effTop = open && panelUp ? pos.top - panelHRef.current : pos.top;
+      const posStyle = { top: effTop + "px", right: pos.right + "px" };
 
       return ReactDOM.createPortal(React.createElement("div", { className: "ncm-widget", style: posStyle, ref: widgetRef },
         open ? null : React.createElement("div", { className: "ncm-pill", onClick: openPanel, title: "网易云音乐（拖动⠿移动，点击展开）" },
@@ -911,12 +947,12 @@ window.__ModuleLoader__.load({
           React.createElement("button", { className: "ncm-pillPlay", onClick: function (e) { e.stopPropagation(); if (now.song) { if (playerControls.toggle) playerControls.toggle(); } else { setOpen(true); } } }, now.playing ? "⏸" : "▶"),
           React.createElement("span", { className: "ncm-pillOpen" }, "⤢"),
         ),
-        React.createElement("div", { className: "ncm-panel" + (open ? "" : " ncm-hidden") },
+        React.createElement("div", { className: "ncm-panel" + (open ? "" : " ncm-hidden"), ref: panelRef },
           now.song && now.song.picUrl ? React.createElement("div", { className: "ncm-panelBg", style: { backgroundImage: "url('" + httpsUrl(now.song.picUrl) + "')" } }) : null,
           now.song ? React.createElement("div", { className: "ncm-panelTint" }) : null,
           React.createElement("div", { className: "ncm-hd", onPointerDown: startDrag, title: "拖动移动窗口" },
             React.createElement("span", { className: "ncm-hdTitle" }, "🎵 网易云音乐"),
-            React.createElement("button", { className: "ncm-close", onClick: function () { if (movedRef.current) { movedRef.current = false; return; } setOpen(false); }, title: "收起" }, "✕"),
+            React.createElement("button", { className: "ncm-close", onClick: closePanel, title: "收起" }, "✕"),
           ),
           React.createElement("div", { className: "ncm-body" }, React.createElement(Player, null)),
         ),
