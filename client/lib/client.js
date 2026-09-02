@@ -69,6 +69,7 @@ window.__ModuleLoader__.load({
     const kEngine = {
       ctx: null, micStream: null, micSource: null,
       gateGain: null, gateAnalyser: null, gateTimer: null, gateThr: 0,
+      preGain: null, highpass: null,
       eqLow: null, eqMid: null, eqHigh: null,
       compressor: null, post: null,
       reverb: null, reverbGain: null,
@@ -83,8 +84,11 @@ window.__ModuleLoader__.load({
       const buf = ctx.createBuffer(2, len, rate);
       for (let ch = 0; ch < 2; ch++) {
         const d = buf.getChannelData(ch);
+        let lp = 0;
         for (let i = 0; i < len; i++) {
-          d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, decay);
+          const white = Math.random() * 2 - 1;
+          lp = lp * 0.72 + white * 0.28; // one-pole lowpass → warmer, less harsh tail
+          d[i] = lp * Math.pow(1 - i / len, decay);
         }
       }
       return buf;
@@ -102,6 +106,13 @@ window.__ModuleLoader__.load({
 
       kEngine.gateGain = ctx.createGain();
       kEngine.gateGain.gain.value = 1;
+
+      kEngine.preGain = ctx.createGain();
+      kEngine.preGain.gain.value = 2; // ~+6 dB mic boost for quiet mics
+      kEngine.highpass = ctx.createBiquadFilter();
+      kEngine.highpass.type = "highpass";
+      kEngine.highpass.frequency.value = 90; // low-cut rumble for clarity
+      kEngine.highpass.Q.value = 0.7;
 
       kEngine.eqLow = ctx.createBiquadFilter();
       kEngine.eqLow.type = "lowshelf"; kEngine.eqLow.frequency.value = 200; kEngine.eqLow.gain.value = 0;
@@ -144,7 +155,9 @@ window.__ModuleLoader__.load({
 
       // wire the voice chain: mic -> gate -> EQ -> compressor -> post -> (dry + wet effects) -> voiceGain -> out
       kEngine.gateAnalyser.connect(kEngine.gateGain);
-      kEngine.gateGain.connect(kEngine.eqLow);
+      kEngine.gateGain.connect(kEngine.preGain);
+      kEngine.preGain.connect(kEngine.highpass);
+      kEngine.highpass.connect(kEngine.eqLow);
       kEngine.eqLow.connect(kEngine.eqMid);
       kEngine.eqMid.connect(kEngine.eqHigh);
       kEngine.eqHigh.connect(kEngine.compressor);
@@ -165,6 +178,7 @@ window.__ModuleLoader__.load({
       const t = ctx.currentTime;
       const st = function (param, v) { if (param) param.setTargetAtTime(v, t, 0.02); };
       st(kEngine.voiceGain && kEngine.voiceGain.gain, fx.voiceVol / 100);
+      st(kEngine.preGain && kEngine.preGain.gain, Math.pow(10, (fx.micGain || 0) / 20));
       st(kEngine.eqLow && kEngine.eqLow.gain, fx.eqLow);
       st(kEngine.eqMid && kEngine.eqMid.gain, fx.eqMid);
       st(kEngine.eqHigh && kEngine.eqHigh.gain, fx.eqHigh);
@@ -405,7 +419,7 @@ window.__ModuleLoader__.load({
       const [pls, setPls] = useState([]);
       const [plsLabel, setPlsLabel] = useState("");
       const [notice, setNotice] = useState("");
-      const [karaoke, setKaraoke] = useState({ show: false, micOn: false, micError: "", speakerMode: false, voiceVol: 100, reverb: 25, echo: 12, chorus: 0, eqLow: 0, eqMid: 0, eqHigh: 0, compress: 30, gate: 0 });
+      const [karaoke, setKaraoke] = useState({ show: false, micOn: false, micError: "", speakerMode: false, micGain: 6, voiceVol: 100, reverb: 15, echo: 0, chorus: 0, eqLow: 0, eqMid: 0, eqHigh: 0, compress: 15, gate: 0 });
       const audioRef = useRef(null);
       const qrTimer = useRef(null);
       const currentRef = useRef(null);
@@ -1015,6 +1029,8 @@ window.__ModuleLoader__.load({
         ),
         karaoke.micError ? React.createElement("div", { className: "ncm-msg" }, karaoke.micError) : null,
         karaoke.speakerMode ? React.createElement("div", { className: "ncm-msg" }, "已开外放模式（回声消除）；追求更干净人声仍建议戴耳机。") : null,
+        karaoke.micOn && !karaoke.speakerMode ? React.createElement("div", { className: "ncm-msg" }, "🎧 耳机模式：若人声浑浊/有回声，请戴耳机，或切到「🔊外放」开启回声消除。") : null,
+        fxRow("增益", "micGain", 0, 30, 1, function (v) { return "+" + v + "dB"; }),
         fxRow("人声", "voiceVol", 0, 150, 1, function (v) { return v + "%"; }),
         React.createElement("div", { className: "ncm-fxRow" },
           React.createElement("span", { className: "ncm-fxLabel" }, "伴奏"),
