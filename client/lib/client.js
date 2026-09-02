@@ -99,8 +99,8 @@ window.__ModuleLoader__.load({
       const AC = window.AudioContext || window.webkitAudioContext;
       if (!AC) return null;
       let ctx;
-      try { ctx = new AC({ latencyHint: 0.01 }); }
-      catch (e) { ctx = new AC({ latencyHint: "interactive" }); }
+      try { ctx = new AC({ latencyHint: "interactive" }); }
+      catch (e) { ctx = new AC(); }
       kEngine.ctx = ctx;
 
       kEngine.gateAnalyser = ctx.createAnalyser();
@@ -827,6 +827,15 @@ window.__ModuleLoader__.load({
         try {
           await ctx.resume();
           const stream = await navigator.mediaDevices.getUserMedia({ audio: constraints });
+          const track = stream.getAudioTracks()[0];
+          if (track) {
+            track.addEventListener("ended", function () {
+              if (kEngine.micStream === stream) {
+                stopKGate();
+                setK({ micOn: false, micError: "麦克风已断开，请重新点击开启" });
+              }
+            });
+          }
           kEngine.micStream = stream;
           kEngine.micSource = ctx.createMediaStreamSource(stream);
           kEngine.micSource.connect(kEngine.gateAnalyser);
@@ -846,7 +855,7 @@ window.__ModuleLoader__.load({
       function setSpeakerMode(on) {
         if (karaoke.speakerMode === on) return;
         setK({ speakerMode: on });
-        if (karaoke.micOn) { stopMicStream(); acquireMic(on); }
+        if (karaoke.micOn) { stopMicStream(); setTimeout(function () { acquireMic(on); }, 150); }
       }
 
       function cycleMode() { setMode(nextMode(modeRef.current)); }
@@ -900,6 +909,16 @@ window.__ModuleLoader__.load({
       useEffect(function () {
         const saved = loadCookie();
         if (saved) { setCookie(saved); loadProfile(saved); }
+      }, []);
+
+      useEffect(function () {
+        function onVis() {
+          if (document.visibilityState === "visible" && kEngine.ctx && kEngine.ctx.state === "suspended") {
+            kEngine.ctx.resume().catch(function () {});
+          }
+        }
+        document.addEventListener("visibilitychange", onVis);
+        return function () { document.removeEventListener("visibilitychange", onVis); };
       }, []);
 
       const hasQr = qr && qr.img && (qr.phase === "ready" || qr.phase === "expired" || qr.phase === "done");
