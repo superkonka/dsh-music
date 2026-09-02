@@ -405,7 +405,7 @@ window.__ModuleLoader__.load({
       const [pls, setPls] = useState([]);
       const [plsLabel, setPlsLabel] = useState("");
       const [notice, setNotice] = useState("");
-      const [karaoke, setKaraoke] = useState({ show: false, micOn: false, micError: "", voiceVol: 100, reverb: 25, echo: 12, chorus: 0, eqLow: 0, eqMid: 0, eqHigh: 0, compress: 30, gate: 0 });
+      const [karaoke, setKaraoke] = useState({ show: false, micOn: false, micError: "", speakerMode: false, voiceVol: 100, reverb: 25, echo: 12, chorus: 0, eqLow: 0, eqMid: 0, eqHigh: 0, compress: 30, gate: 0 });
       const audioRef = useRef(null);
       const qrTimer = useRef(null);
       const currentRef = useRef(null);
@@ -780,13 +780,22 @@ window.__ModuleLoader__.load({
         else enableMic();
       }
 
-      async function enableMic() {
+      function stopMicStream() {
+        stopKGate();
+        if (kEngine.micSource) { try { kEngine.micSource.disconnect(); } catch (e) {} kEngine.micSource = null; }
+        if (kEngine.micStream) { kEngine.micStream.getTracks().forEach(function (t) { t.stop(); }); kEngine.micStream = null; }
+      }
+
+      async function acquireMic(speaker) {
         const ctx = ensureKEngine();
         if (!ctx) { setK({ micError: "浏览器不支持 Web Audio" }); return; }
         if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) { setK({ micError: "当前环境不支持麦克风" }); return; }
+        const constraints = speaker
+          ? { echoCancellation: true, noiseSuppression: true, autoGainControl: true }
+          : { echoCancellation: false, noiseSuppression: false, autoGainControl: false };
         try {
           await ctx.resume();
-          const stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false } });
+          const stream = await navigator.mediaDevices.getUserMedia({ audio: constraints });
           kEngine.micStream = stream;
           kEngine.micSource = ctx.createMediaStreamSource(stream);
           kEngine.micSource.connect(kEngine.gateAnalyser);
@@ -799,11 +808,14 @@ window.__ModuleLoader__.load({
         }
       }
 
-      function disableMic() {
-        stopKGate();
-        if (kEngine.micSource) { try { kEngine.micSource.disconnect(); } catch (e) {} kEngine.micSource = null; }
-        if (kEngine.micStream) { kEngine.micStream.getTracks().forEach(function (t) { t.stop(); }); kEngine.micStream = null; }
-        setK({ micOn: false });
+      function enableMic() { acquireMic(karaoke.speakerMode); }
+
+      function disableMic() { stopMicStream(); setK({ micOn: false }); }
+
+      function setSpeakerMode(on) {
+        if (karaoke.speakerMode === on) return;
+        setK({ speakerMode: on });
+        if (karaoke.micOn) { stopMicStream(); acquireMic(on); }
       }
 
       function cycleMode() { setMode(nextMode(modeRef.current)); }
@@ -996,9 +1008,13 @@ window.__ModuleLoader__.load({
       const fxCard = karaoke.show ? React.createElement("div", { className: "ncm-fx" },
         React.createElement("div", { className: "ncm-fxHead" },
           React.createElement("span", { className: "ncm-fxTitle" }, "🎙 声卡 / K歌"),
-          React.createElement("button", { className: "ncm-btn" + (karaoke.micOn ? " ncm-primary" : ""), onClick: toggleMic }, karaoke.micOn ? "🎤 麦克风已开" : "🎤 开启麦克风"),
+          React.createElement("div", { style: { display: "flex", gap: "6px" } },
+            React.createElement("button", { className: "ncm-btn", onClick: function () { setSpeakerMode(!karaoke.speakerMode); }, title: karaoke.speakerMode ? "外放：已开回声消除，点击切回耳机" : "耳机：点击切到外放（开回声消除）" }, karaoke.speakerMode ? "🔊 外放" : "🎧 耳机"),
+            React.createElement("button", { className: "ncm-btn" + (karaoke.micOn ? " ncm-primary" : ""), onClick: toggleMic }, karaoke.micOn ? "🎤 麦克风已开" : "🎤 开启麦克风"),
+          ),
         ),
         karaoke.micError ? React.createElement("div", { className: "ncm-msg" }, karaoke.micError) : null,
+        karaoke.speakerMode ? React.createElement("div", { className: "ncm-msg" }, "已开外放模式（回声消除）；追求更干净人声仍建议戴耳机。") : null,
         fxRow("人声", "voiceVol", 0, 150, 1, function (v) { return v + "%"; }),
         React.createElement("div", { className: "ncm-fxRow" },
           React.createElement("span", { className: "ncm-fxLabel" }, "伴奏"),
