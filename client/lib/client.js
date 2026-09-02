@@ -65,6 +65,136 @@ window.__ModuleLoader__.load({
     }
     const playerControls = { toggle: null, next: null, prev: null };
 
+    // ---- 声卡 / K歌 Web Audio engine (module-level, mic-only chain) ----
+    const kEngine = {
+      ctx: null, micStream: null, micSource: null,
+      gateGain: null, gateAnalyser: null, gateTimer: null, gateThr: 0,
+      eqLow: null, eqMid: null, eqHigh: null,
+      compressor: null, post: null,
+      reverb: null, reverbGain: null,
+      delay: null, delayFeedback: null, delayGain: null,
+      chorus: null, chorusLFO: null, chorusLFOGain: null, chorusGain: null,
+      sum: null, voiceGain: null,
+    };
+
+    function makeImpulse(ctx, seconds, decay) {
+      const rate = ctx.sampleRate;
+      const len = Math.max(1, Math.floor(rate * seconds));
+      const buf = ctx.createBuffer(2, len, rate);
+      for (let ch = 0; ch < 2; ch++) {
+        const d = buf.getChannelData(ch);
+        for (let i = 0; i < len; i++) {
+          d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, decay);
+        }
+      }
+      return buf;
+    }
+
+    function ensureKEngine() {
+      if (kEngine.ctx) return kEngine.ctx;
+      const AC = window.AudioContext || window.webkitAudioContext;
+      if (!AC) return null;
+      const ctx = new AC({ latencyHint: "interactive" });
+      kEngine.ctx = ctx;
+
+      kEngine.gateAnalyser = ctx.createAnalyser();
+      kEngine.gateAnalyser.fftSize = 512;
+
+      kEngine.gateGain = ctx.createGain();
+      kEngine.gateGain.gain.value = 1;
+
+      kEngine.eqLow = ctx.createBiquadFilter();
+      kEngine.eqLow.type = "lowshelf"; kEngine.eqLow.frequency.value = 200; kEngine.eqLow.gain.value = 0;
+      kEngine.eqMid = ctx.createBiquadFilter();
+      kEngine.eqMid.type = "peaking"; kEngine.eqMid.frequency.value = 1000; kEngine.eqMid.Q.value = 0.7; kEngine.eqMid.gain.value = 0;
+      kEngine.eqHigh = ctx.createBiquadFilter();
+      kEngine.eqHigh.type = "highshelf"; kEngine.eqHigh.frequency.value = 4000; kEngine.eqHigh.gain.value = 0;
+
+      kEngine.compressor = ctx.createDynamicsCompressor();
+      kEngine.compressor.threshold.value = -24;
+      kEngine.compressor.knee.value = 20;
+      kEngine.compressor.attack.value = 0.003;
+      kEngine.compressor.release.value = 0.25;
+      kEngine.compressor.ratio.value = 1;
+
+      kEngine.post = ctx.createGain();
+      kEngine.post.gain.value = 1;
+
+      kEngine.reverb = ctx.createConvolver();
+      kEngine.reverb.buffer = makeImpulse(ctx, 2.2, 2.8);
+      kEngine.reverbGain = ctx.createGain(); kEngine.reverbGain.gain.value = 0;
+
+      kEngine.delay = ctx.createDelay(1.5);
+      kEngine.delay.delayTime.value = 0.28;
+      kEngine.delayFeedback = ctx.createGain(); kEngine.delayFeedback.gain.value = 0.35;
+      kEngine.delayGain = ctx.createGain(); kEngine.delayGain.gain.value = 0;
+
+      kEngine.chorus = ctx.createDelay(0.1);
+      kEngine.chorus.delayTime.value = 0.02;
+      kEngine.chorusGain = ctx.createGain(); kEngine.chorusGain.gain.value = 0;
+      kEngine.chorusLFO = ctx.createOscillator(); kEngine.chorusLFO.frequency.value = 0.4;
+      kEngine.chorusLFOGain = ctx.createGain(); kEngine.chorusLFOGain.gain.value = 0.004;
+      kEngine.chorusLFO.connect(kEngine.chorusLFOGain);
+      kEngine.chorusLFOGain.connect(kEngine.chorus.delayTime);
+      kEngine.chorusLFO.start();
+
+      kEngine.sum = ctx.createGain(); kEngine.sum.gain.value = 1;
+      kEngine.voiceGain = ctx.createGain(); kEngine.voiceGain.gain.value = 1;
+      kEngine.voiceGain.connect(ctx.destination);
+
+      // wire the voice chain: mic -> gate -> EQ -> compressor -> post -> (dry + wet effects) -> voiceGain -> out
+      kEngine.gateAnalyser.connect(kEngine.gateGain);
+      kEngine.gateGain.connect(kEngine.eqLow);
+      kEngine.eqLow.connect(kEngine.eqMid);
+      kEngine.eqMid.connect(kEngine.eqHigh);
+      kEngine.eqHigh.connect(kEngine.compressor);
+      kEngine.compressor.connect(kEngine.post);
+      kEngine.post.connect(kEngine.sum);
+      kEngine.post.connect(kEngine.reverb); kEngine.reverb.connect(kEngine.reverbGain); kEngine.reverbGain.connect(kEngine.sum);
+      kEngine.post.connect(kEngine.delay); kEngine.delay.connect(kEngine.delayGain); kEngine.delayGain.connect(kEngine.sum);
+      kEngine.delay.connect(kEngine.delayFeedback); kEngine.delayFeedback.connect(kEngine.delay);
+      kEngine.post.connect(kEngine.chorus); kEngine.chorus.connect(kEngine.chorusGain); kEngine.chorusGain.connect(kEngine.sum);
+      kEngine.sum.connect(kEngine.voiceGain);
+
+      return ctx;
+    }
+
+    function applyKaraokeFx(fx) {
+      const ctx = kEngine.ctx;
+      if (!ctx) return;
+      const t = ctx.currentTime;
+      const st = function (param, v) { if (param) param.setTargetAtTime(v, t, 0.02); };
+      st(kEngine.voiceGain && kEngine.voiceGain.gain, fx.voiceVol / 100);
+      st(kEngine.eqLow && kEngine.eqLow.gain, fx.eqLow);
+      st(kEngine.eqMid && kEngine.eqMid.gain, fx.eqMid);
+      st(kEngine.eqHigh && kEngine.eqHigh.gain, fx.eqHigh);
+      st(kEngine.reverbGain && kEngine.reverbGain.gain, (fx.reverb / 100) * 0.9);
+      st(kEngine.delayGain && kEngine.delayGain.gain, (fx.echo / 100) * 0.6);
+      st(kEngine.chorusGain && kEngine.chorusGain.gain, (fx.chorus / 100) * 0.5);
+      st(kEngine.compressor && kEngine.compressor.ratio, 1 + (fx.compress / 100) * 11);
+      kEngine.gateThr = (fx.gate / 100) * 0.12;
+    }
+
+    function startKGate() {
+      stopKGate();
+      if (!kEngine.ctx || !kEngine.gateAnalyser || !kEngine.gateGain) return;
+      const buf = new Float32Array(kEngine.gateAnalyser.fftSize);
+      kEngine.gateTimer = setInterval(function () {
+        if (!kEngine.gateAnalyser || !kEngine.gateGain) return;
+        kEngine.gateAnalyser.getFloatTimeDomainData(buf);
+        let s = 0;
+        for (let i = 0; i < buf.length; i++) s += buf[i] * buf[i];
+        const rms = Math.sqrt(s / buf.length);
+        const open = kEngine.gateThr <= 0 ? true : rms > kEngine.gateThr;
+        const t = kEngine.ctx.currentTime;
+        kEngine.gateGain.gain.setTargetAtTime(open ? 1 : 0, t, open ? 0.01 : 0.06);
+      }, 40);
+    }
+
+    function stopKGate() {
+      if (kEngine.gateTimer) { clearInterval(kEngine.gateTimer); kEngine.gateTimer = null; }
+    }
+
     (function injectStyles() {
       if (typeof document === "undefined") return;
       const id = "@deepseek-ai/dsh-client-ui-music/styles";
@@ -178,7 +308,14 @@ window.__ModuleLoader__.load({
         ".ncm-artistLink{cursor:pointer;}" +
         ".ncm-artistLink:hover{color:#ec4141;text-decoration:underline;}" +
         ".ncm-songDur{flex:0 0 auto;font-size:11px;opacity:.5;}" +
-        ".ncm-notice{font-size:12px;color:#e8a23a;margin-top:8px;}";
+        ".ncm-notice{font-size:12px;color:#e8a23a;margin-top:8px;}" +
+        ".ncm-fx{margin-bottom:12px;padding:12px;border:1px solid rgba(255,255,255,.1);border-radius:12px;background:rgba(30,30,38,.3);}" +
+        ".ncm-fxHead{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;}" +
+        ".ncm-fxTitle{font-size:13px;font-weight:600;}" +
+        ".ncm-fxRow{display:flex;align-items:center;gap:8px;margin-bottom:5px;}" +
+        ".ncm-fxLabel{font-size:11px;opacity:.75;flex:0 0 38px;}" +
+        ".ncm-fxRange{flex:1;min-width:0;accent-color:#ec4141;height:14px;cursor:pointer;}" +
+        ".ncm-fxVal{font-size:10px;opacity:.55;flex:0 0 34px;text-align:right;font-variant-numeric:tabular-nums;}";
       document.head.appendChild(tag);
     })();
 
@@ -268,6 +405,7 @@ window.__ModuleLoader__.load({
       const [pls, setPls] = useState([]);
       const [plsLabel, setPlsLabel] = useState("");
       const [notice, setNotice] = useState("");
+      const [karaoke, setKaraoke] = useState({ show: false, micOn: false, micError: "", voiceVol: 100, reverb: 25, echo: 12, chorus: 0, eqLow: 0, eqMid: 0, eqHigh: 0, compress: 30, gate: 0 });
       const audioRef = useRef(null);
       const qrTimer = useRef(null);
       const currentRef = useRef(null);
@@ -629,6 +767,45 @@ window.__ModuleLoader__.load({
         if (audioRef.current) audioRef.current.volume = v;
       }
 
+      function setK(patch) {
+        setKaraoke(function (k) {
+          const n = Object.assign({}, k, patch);
+          applyKaraokeFx(n);
+          return n;
+        });
+      }
+
+      function toggleMic() {
+        if (karaoke.micOn) disableMic();
+        else enableMic();
+      }
+
+      async function enableMic() {
+        const ctx = ensureKEngine();
+        if (!ctx) { setK({ micError: "浏览器不支持 Web Audio" }); return; }
+        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) { setK({ micError: "当前环境不支持麦克风" }); return; }
+        try {
+          await ctx.resume();
+          const stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false } });
+          kEngine.micStream = stream;
+          kEngine.micSource = ctx.createMediaStreamSource(stream);
+          kEngine.micSource.connect(kEngine.gateAnalyser);
+          applyKaraokeFx(karaoke);
+          startKGate();
+          setK({ micOn: true, micError: "" });
+        } catch (e) {
+          console.error("[ncm] mic", e);
+          setK({ micError: "麦克风不可用：" + (e && e.name || "未知错误") });
+        }
+      }
+
+      function disableMic() {
+        stopKGate();
+        if (kEngine.micSource) { try { kEngine.micSource.disconnect(); } catch (e) {} kEngine.micSource = null; }
+        if (kEngine.micStream) { kEngine.micStream.getTracks().forEach(function (t) { t.stop(); }); kEngine.micStream = null; }
+        setK({ micOn: false });
+      }
+
       function cycleMode() { setMode(nextMode(modeRef.current)); }
 
       function playPrev() {
@@ -671,6 +848,9 @@ window.__ModuleLoader__.load({
           stopQr();
           if (audioRef.current) audioRef.current.pause();
           if (batchTimerRef.current) { clearInterval(batchTimerRef.current); batchTimerRef.current = null; }
+          stopKGate();
+          if (kEngine.micSource) { try { kEngine.micSource.disconnect(); } catch (e) {} kEngine.micSource = null; }
+          if (kEngine.micStream) { kEngine.micStream.getTracks().forEach(function (t) { t.stop(); }); kEngine.micStream = null; }
         };
       }, []);
 
@@ -723,6 +903,7 @@ window.__ModuleLoader__.load({
           React.createElement("div", { className: "ncm-ctlRow" },
             React.createElement("div", { className: "ncm-ctlLeft" },
               React.createElement("button", { className: "ncm-lyricBtn", onClick: function () { setLyricOpen(!lyricOpen); } }, lyricOpen ? "歌词 ✕" : "📜 歌词"),
+              React.createElement("button", { className: "ncm-lyricBtn", onClick: function () { setKaraoke(function (k) { return Object.assign({}, k, { show: !k.show }); }); } }, karaoke.show ? "声卡 ✕" : "🎙 声卡"),
             ),
             React.createElement("div", { className: "ncm-ctlCenter" },
               React.createElement("button", { className: "ncm-mode", onClick: cycleMode, title: modeTitle(mode) }, modeIcon(mode)),
@@ -799,6 +980,41 @@ window.__ModuleLoader__.load({
 
       const noticeEl = notice ? React.createElement("div", { className: "ncm-notice" }, notice) : null;
 
+      function fxRow(label, key, min, max, step, fmtVal) {
+        return React.createElement("div", { className: "ncm-fxRow", key: key },
+          React.createElement("span", { className: "ncm-fxLabel" }, label),
+          React.createElement("input", {
+            type: "range", className: "ncm-fxRange",
+            min: String(min), max: String(max), step: String(step),
+            value: karaoke[key],
+            onChange: function (e) { const p = {}; p[key] = Number(e.target.value); setK(p); },
+          }),
+          React.createElement("span", { className: "ncm-fxVal" }, fmtVal ? fmtVal(karaoke[key]) : String(karaoke[key])),
+        );
+      }
+
+      const fxCard = karaoke.show ? React.createElement("div", { className: "ncm-fx" },
+        React.createElement("div", { className: "ncm-fxHead" },
+          React.createElement("span", { className: "ncm-fxTitle" }, "🎙 声卡 / K歌"),
+          React.createElement("button", { className: "ncm-btn" + (karaoke.micOn ? " ncm-primary" : ""), onClick: toggleMic }, karaoke.micOn ? "🎤 麦克风已开" : "🎤 开启麦克风"),
+        ),
+        karaoke.micError ? React.createElement("div", { className: "ncm-msg" }, karaoke.micError) : null,
+        fxRow("人声", "voiceVol", 0, 150, 1, function (v) { return v + "%"; }),
+        React.createElement("div", { className: "ncm-fxRow" },
+          React.createElement("span", { className: "ncm-fxLabel" }, "伴奏"),
+          React.createElement("input", { type: "range", className: "ncm-fxRange", min: "0", max: "150", step: "1", value: Math.round(volume * 100), onChange: function (e) { changeVolume(Number(e.target.value) / 100); } }),
+          React.createElement("span", { className: "ncm-fxVal" }, Math.round(volume * 100) + "%"),
+        ),
+        fxRow("混响", "reverb", 0, 100, 1),
+        fxRow("回声", "echo", 0, 100, 1),
+        fxRow("合唱", "chorus", 0, 100, 1),
+        fxRow("低音", "eqLow", -12, 12, 1),
+        fxRow("中音", "eqMid", -12, 12, 1),
+        fxRow("高音", "eqHigh", -12, 12, 1),
+        fxRow("压缩", "compress", 0, 100, 1),
+        fxRow("噪声门", "gate", 0, 100, 1),
+      ) : null;
+
       const pickerOpen = !!pickerSong || creating;
       const pickerEl = pickerOpen ? React.createElement("div", { className: "ncm-pickerOverlay", onClick: function () { setPickerSong(null); setCreating(false); setCreateName(""); } },
         React.createElement("div", { className: "ncm-pickerPanel", onClick: function (e) { e.stopPropagation(); } },
@@ -823,7 +1039,7 @@ window.__ModuleLoader__.load({
       ) : null;
 
       return React.createElement("div", null,
-        userRow, nowEl, lyricEl, searchRow, plEl, artistBar, batchBar, songList, noticeEl, pickerEl,
+        userRow, nowEl, fxCard, lyricEl, searchRow, plEl, artistBar, batchBar, songList, noticeEl, pickerEl,
         React.createElement("audio", {
           ref: audioRef, crossOrigin: "anonymous", style: { display: "none" },
           onPlay: function () { setPlaying(true); setNow(currentRef.current, true); },
