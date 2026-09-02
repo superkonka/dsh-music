@@ -71,7 +71,7 @@ window.__ModuleLoader__.load({
       gateGain: null, gateAnalyser: null, gateTimer: null, gateThr: 0,
       preGain: null, highpass: null,
       eqLow: null, eqMid: null, eqHigh: null,
-      compressor: null, post: null,
+      compressor: null, compressorBypassed: false, post: null,
       reverb: null, reverbGain: null,
       delay: null, delayFeedback: null, delayGain: null,
       chorus: null, chorusLFO: null, chorusLFOGain: null, chorusGain: null,
@@ -98,7 +98,9 @@ window.__ModuleLoader__.load({
       if (kEngine.ctx) return kEngine.ctx;
       const AC = window.AudioContext || window.webkitAudioContext;
       if (!AC) return null;
-      const ctx = new AC({ latencyHint: "interactive" });
+      let ctx;
+      try { ctx = new AC({ latencyHint: 0.01 }); }
+      catch (e) { ctx = new AC({ latencyHint: "interactive" }); }
       kEngine.ctx = ctx;
 
       kEngine.gateAnalyser = ctx.createAnalyser();
@@ -186,6 +188,21 @@ window.__ModuleLoader__.load({
       st(kEngine.delayGain && kEngine.delayGain.gain, (fx.echo / 100) * 0.6);
       st(kEngine.chorusGain && kEngine.chorusGain.gain, (fx.chorus / 100) * 0.5);
       st(kEngine.compressor && kEngine.compressor.ratio, 1 + (fx.compress / 100) * 11);
+      // Bypass the compressor when it is off: DynamicsCompressorNode adds ~6ms
+      // lookahead latency even at unity, which matters for live monitoring.
+      const wantBypass = (fx.compress || 0) <= 0;
+      if (kEngine.ctx && kEngine.compressorBypassed !== wantBypass) {
+        kEngine.compressorBypassed = wantBypass;
+        try {
+          if (wantBypass) {
+            kEngine.eqHigh.disconnect(kEngine.compressor);
+            kEngine.eqHigh.connect(kEngine.post);
+          } else {
+            kEngine.eqHigh.disconnect(kEngine.post);
+            kEngine.eqHigh.connect(kEngine.compressor);
+          }
+        } catch (e) {}
+      }
       kEngine.gateThr = (fx.gate / 100) * 0.12;
     }
 
@@ -419,7 +436,7 @@ window.__ModuleLoader__.load({
       const [pls, setPls] = useState([]);
       const [plsLabel, setPlsLabel] = useState("");
       const [notice, setNotice] = useState("");
-      const [karaoke, setKaraoke] = useState({ show: false, micOn: false, micError: "", speakerMode: false, micGain: 6, voiceVol: 100, reverb: 15, echo: 0, chorus: 0, eqLow: 0, eqMid: 0, eqHigh: 0, compress: 15, gate: 0 });
+      const [karaoke, setKaraoke] = useState({ show: false, micOn: false, micError: "", speakerMode: false, micGain: 6, voiceVol: 100, reverb: 0, echo: 0, chorus: 0, eqLow: 0, eqMid: 0, eqHigh: 0, compress: 0, gate: 0 });
       const audioRef = useRef(null);
       const qrTimer = useRef(null);
       const currentRef = useRef(null);
@@ -1029,7 +1046,7 @@ window.__ModuleLoader__.load({
         ),
         karaoke.micError ? React.createElement("div", { className: "ncm-msg" }, karaoke.micError) : null,
         karaoke.speakerMode ? React.createElement("div", { className: "ncm-msg" }, "已开外放模式（回声消除）；追求更干净人声仍建议戴耳机。") : null,
-        karaoke.micOn && !karaoke.speakerMode ? React.createElement("div", { className: "ncm-msg" }, "🎧 耳机模式：若人声浑浊/有回声，请戴耳机，或切到「🔊外放」开启回声消除。") : null,
+        karaoke.micOn && !karaoke.speakerMode ? React.createElement("div", { className: "ncm-msg" }, "🎧 耳机模式：若延迟明显，请改用有线耳机（蓝牙耳机延迟较高）；有回声请切「🔊外放」。") : null,
         fxRow("增益", "micGain", 0, 30, 1, function (v) { return "+" + v + "dB"; }),
         fxRow("人声", "voiceVol", 0, 150, 1, function (v) { return v + "%"; }),
         React.createElement("div", { className: "ncm-fxRow" },
