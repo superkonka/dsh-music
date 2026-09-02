@@ -921,6 +921,30 @@ window.__ModuleLoader__.load({
         return function () { document.removeEventListener("visibilitychange", onVis); };
       }, []);
 
+      // Follow OS default output device changes (e.g. unplug Bluetooth → wired):
+      // an AudioContext keeps routing to the device it was created on, so re-route
+      // both the Web Audio graph and the music <audio> to the new default sink.
+      useEffect(function () {
+        function reroute() {
+          if (kEngine.ctx) {
+            if (kEngine.ctx.setSinkId) { kEngine.ctx.setSinkId("").catch(function () {}); }
+            if (kEngine.ctx.state === "suspended") { kEngine.ctx.resume().catch(function () {}); }
+          }
+          if (audioRef.current && audioRef.current.setSinkId) {
+            audioRef.current.setSinkId("").catch(function () {});
+          }
+        }
+        function onDev() { setTimeout(reroute, 200); }
+        if (navigator.mediaDevices && navigator.mediaDevices.addEventListener) {
+          navigator.mediaDevices.addEventListener("devicechange", onDev);
+        }
+        return function () {
+          if (navigator.mediaDevices && navigator.mediaDevices.removeEventListener) {
+            navigator.mediaDevices.removeEventListener("devicechange", onDev);
+          }
+        };
+      }, []);
+
       const hasQr = qr && qr.img && (qr.phase === "ready" || qr.phase === "expired" || qr.phase === "done");
       const btnLabel = qr && qr.phase === "loading" ? "生成中…" : (qr && (qr.phase === "ready" || qr.phase === "expired" || qr.phase === "error") ? "重新获取二维码" : "扫码登录");
 
