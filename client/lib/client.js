@@ -436,7 +436,7 @@ window.__ModuleLoader__.load({
       const [pls, setPls] = useState([]);
       const [plsLabel, setPlsLabel] = useState("");
       const [notice, setNotice] = useState("");
-      const [karaoke, setKaraoke] = useState({ show: false, micOn: false, micError: "", speakerMode: false, micGain: 6, voiceVol: 100, reverb: 0, echo: 0, chorus: 0, eqLow: 0, eqMid: 0, eqHigh: 0, compress: 0, gate: 0 });
+      const [karaoke, setKaraoke] = useState({ show: false, micOn: false, micError: "", speakerMode: false, noiseReduction: true, micGain: 6, voiceVol: 100, reverb: 0, echo: 0, chorus: 0, eqLow: 0, eqMid: 0, eqHigh: 0, compress: 0, gate: 0 });
       const audioRef = useRef(null);
       const qrTimer = useRef(null);
       const currentRef = useRef(null);
@@ -817,13 +817,15 @@ window.__ModuleLoader__.load({
         if (kEngine.micStream) { kEngine.micStream.getTracks().forEach(function (t) { t.stop(); }); kEngine.micStream = null; }
       }
 
-      async function acquireMic(speaker) {
+      async function acquireMic(speaker, denoise) {
         const ctx = ensureKEngine();
         if (!ctx) { setK({ micError: "浏览器不支持 Web Audio" }); return; }
         if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) { setK({ micError: "当前环境不支持麦克风" }); return; }
-        const constraints = speaker
-          ? { echoCancellation: true, noiseSuppression: true, autoGainControl: true }
-          : { echoCancellation: false, noiseSuppression: false, autoGainControl: false };
+        const constraints = {
+          echoCancellation: !!speaker,
+          noiseSuppression: !!denoise,
+          autoGainControl: false,
+        };
         try {
           await ctx.resume();
           const stream = await navigator.mediaDevices.getUserMedia({ audio: constraints });
@@ -848,14 +850,20 @@ window.__ModuleLoader__.load({
         }
       }
 
-      function enableMic() { acquireMic(karaoke.speakerMode); }
+      function enableMic() { acquireMic(karaoke.speakerMode, karaoke.noiseReduction); }
 
       function disableMic() { stopMicStream(); setK({ micOn: false }); }
 
       function setSpeakerMode(on) {
         if (karaoke.speakerMode === on) return;
         setK({ speakerMode: on });
-        if (karaoke.micOn) { stopMicStream(); setTimeout(function () { acquireMic(on); }, 150); }
+        if (karaoke.micOn) { stopMicStream(); setTimeout(function () { acquireMic(on, karaoke.noiseReduction); }, 150); }
+      }
+
+      function setNoiseReduction(on) {
+        if (karaoke.noiseReduction === on) return;
+        setK({ noiseReduction: on });
+        if (karaoke.micOn) { stopMicStream(); setTimeout(function () { acquireMic(karaoke.speakerMode, on); }, 150); }
       }
 
       function cycleMode() { setMode(nextMode(modeRef.current)); }
@@ -1084,6 +1092,7 @@ window.__ModuleLoader__.load({
           React.createElement("span", { className: "ncm-fxTitle" }, "🎙 声卡 / K歌"),
           React.createElement("div", { style: { display: "flex", gap: "6px" } },
             React.createElement("button", { className: "ncm-btn", onClick: function () { setSpeakerMode(!karaoke.speakerMode); }, title: karaoke.speakerMode ? "外放：已开回声消除，点击切回耳机" : "耳机：点击切到外放（开回声消除）" }, karaoke.speakerMode ? "🔊 外放" : "🎧 耳机"),
+            React.createElement("button", { className: "ncm-btn", onClick: function () { setNoiseReduction(!karaoke.noiseReduction); }, title: "浏览器内置 AI 降噪（识别语音、抑制环境噪音，会略微增加延迟）" }, karaoke.noiseReduction ? "✨ 降噪开" : "降噪关"),
             React.createElement("button", { className: "ncm-btn" + (karaoke.micOn ? " ncm-primary" : ""), onClick: toggleMic }, karaoke.micOn ? "🎤 麦克风已开" : "🎤 开启麦克风"),
           ),
         ),
