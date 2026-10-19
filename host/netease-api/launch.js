@@ -9,6 +9,15 @@ const http = require('http')
 const https = require('https')
 const { spawn } = require('child_process')
 
+// NeteaseCloudMusicApi's util/request.js readFileSync(<tmp>/anonymous_token)
+// at require time and crashes when it is missing; ensure a placeholder exists
+// (empty until register_anonimous writes the real MUSIC_A value).
+try {
+  fs.accessSync(path.join(os.tmpdir(), 'anonymous_token'))
+} catch {
+  fs.writeFileSync(path.join(os.tmpdir(), 'anonymous_token'), '')
+}
+
 const ncm = path.join(__dirname, 'node_modules', 'NeteaseCloudMusicApi')
 const { generateRandomChineseIP, cookieToJson } = require(path.join(ncm, 'util', 'index'))
 const { serveNcmApi } = require(path.join(ncm, 'server'))
@@ -16,8 +25,10 @@ const { register_anonimous } = require(path.join(ncm, 'main'))
 
 const CACHE_DIR = path.join(__dirname, 'karaoke-cache')
 const SEPARATE_SCRIPT = path.join(__dirname, 'separate.py')
+// Python interpreter used for optional Demucs vocal separation.
+// Override with DSH_PYTHON; otherwise use the platform default.
 const PYTHON = process.env.DSH_PYTHON
-  || 'C:/Users/Administrator/AppData/Roaming/kimi-desktop/daimon-share/daimon/runtime/python/.venv/Scripts/python.exe'
+  || (process.platform === 'win32' ? 'python' : 'python3')
 
 // Some request modules fall back to this when the client IP looks loopback.
 global.cnIp = generateRandomChineseIP()

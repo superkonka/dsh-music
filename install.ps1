@@ -21,6 +21,7 @@ New-Item -ItemType Directory -Force -Path $apiDir | Out-Null
 Copy-Item (Join-Path $root "host\index.js")               (Join-Path $hostDest "index.js")               -Force
 Copy-Item (Join-Path $root "host\netease-api\launch.js")  (Join-Path $apiDir "launch.js")                -Force
 Copy-Item (Join-Path $root "host\netease-api\package.json") (Join-Path $apiDir "package.json")           -Force
+Copy-Item (Join-Path $root "host\netease-api\separate.py") (Join-Path $apiDir "separate.py")            -Force
 Write-Host "    host plugin -> $hostDest"
 
 # --- 2. install NeteaseCloudMusicApi ---
@@ -62,7 +63,7 @@ if (-not (Test-Path $patchFile)) {
   } else {
     $row = @"
 
-# dsh-music: Netease Cloud Music player (top-right overlay) + API server
+# dsh-music: Netease Cloud Music player (bottom-right floating player) + API server
 - insert:
     - id: ui-music
       name: '@deepseek-ai/dsh-client-ui-music'
@@ -80,4 +81,4 @@ if (-not (Test-Path $patchFile)) {
 }
 
 Write-Host ""
-Write-Host "==> done. Restart DSH (or hard-refresh the page); the music player appears top-right." -ForegroundColor Green
+Write-Host "==> done. Restart DSH (or hard-refresh the page); the player appears bottom-right." -ForegroundColor Green

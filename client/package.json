@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-client-ui-music",
-  "description": "Netease Cloud Music player: QR login, search, playlists and playback in a top-right overlay",
-  "version": "0.1.0",
+  "description": "Netease Cloud Music player for DeepSeek Harness: bottom-right floating mini player + full panel (8px grid visual refactor)",
+  "version": "0.2.0",
   "private": true,
   "type": "module",
   "main": "lib/index.js",
